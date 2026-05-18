@@ -115,6 +115,7 @@ details summary {{
 }}
 </style>
 """, unsafe_allow_html=True)
+
 DEFAULTS = {
     "full_data":        pd.DataFrame(columns=HEADERS),
     "cat_filter":       "TODOS",
@@ -127,6 +128,7 @@ DEFAULTS = {
 for _k, _v in DEFAULTS.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
+
 
 def add_log_entry(accion: str, detalle: str):
     ahora = datetime.now()
@@ -144,58 +146,110 @@ def add_log_entry(accion: str, detalle: str):
             w.writerow(["FECHA", "HORA", "ACCION", "DETALLE"])
         w.writerow([entry["FECHA"], entry["HORA"], accion, detalle])
 
+
+def _normalize_col(name: str) -> str:
+    """Normaliza un nombre de columna quitando tildes y pasando a mayúsculas."""
+    return (
+        name.strip().upper()
+        .replace("Á", "A").replace("É", "E").replace("Í", "I")
+        .replace("Ó", "O").replace("Ú", "U").replace("Ü", "U")
+    )
+
+
 def load_data():
+    """
+    Lee el CSV con detección automática de encoding (utf-8-sig → latin-1 → utf-8)
+    y hace matching flexible de columnas para sobrevivir tildes mal codificadas.
+    """
     if not os.path.exists(FILE_NAME):
         st.session_state.full_data = pd.DataFrame(columns=HEADERS)
         return
-    rows, sec_set, pos_set = [], set(), set()
-    try:
-        with open(FILE_NAME, mode="r", encoding="latin-1") as f:
-            reader = csv.reader(f, delimiter=";")
-            # Leemos la primera línea (cabecera) y limpiamos espacios y tildes invisibles
-            raw_headers = [h.strip().upper() for h in next(reader, None)]
-            idx_id = raw_headers.index("ID") if "ID" in raw_headers else 0
-            idx_nom = raw_headers.index("NOMBRE / DESC") if "NOMBRE / DESC" in raw_headers else 1
-            idx_sec = [i for i, h in enumerate(raw_headers) if "SEC" in h][0]
-            idx_pos = [i for i, h in enumerate(raw_headers) if "POS" in h][0]
-            idx_est = [i for i, h in enumerate(raw_headers) if "EST" in h][0]
-            idx_rep = [i for i, h in enumerate(raw_headers) if "REP" in h and "CANT" not in h][0]
-            idx_cant = [i for i, h in enumerate(raw_headers) if "CANT" in h][0]
-            idx_idsec = [i for i, h in enumerate(raw_headers) if "ID SEC" in h or "ID_SEC" in h or h == raw_headers[-1]][0]
-            for r in reader:
-                if not r or len(r) < 4: 
-                    continue
-                if len(r) < len(raw_headers):
-                    r += [""] * (len(raw_headers) - len(r))
-                sec_val = r[idx_sec].strip()
-                pos_val = r[idx_pos].strip()
-                est_val = r[idx_est].strip().upper()
-                rep_val = r[idx_rep].strip().upper()
-                cant_val = r[idx_cant].strip()
-                v = {
-                    "ID":             r[idx_id].strip().zfill(3),
-                    "NOMBRE / DESC":  r[idx_nom].strip(),
-                    "SECCIÓN":        sec_val,
-                    "POSICIÓN":       pos_val,
-                    "ESTADO":         "TENGO" in est_val or "✓" in est_val or est_val == "TRUE",
-                    "REPE":           rep_val in ("SI", "SÍ") or rep_val == "TRUE",
-                    "CANTIDAD_REPES": int(cant_val) if cant_val.isdigit() else 0,
-                    "ID SECCIÓN":     r[idx_idsec].strip()}        
-                rows.append(v)
-                if v["SECCIÓN"]: sec_set.add(v["SECCIÓN"])
-                if v["POSICIÓN"]: pos_set.add(v["POSICIÓN"])
-    except Exception as e:
-        st.error(f"Error crítico al procesar estructura de columnas del CSV: {e}")
+
+    # ── 1. Intentar leer con distintos encodings ──────────────────────────────
+    df = None
+    for enc in ("utf-8-sig", "latin-1", "utf-8", "cp1252"):
+        try:
+            df = pd.read_csv(
+                FILE_NAME,
+                sep=";",
+                encoding=enc,
+                dtype=str,
+                keep_default_na=False,
+            )
+            # Si la primera columna contiene ";", el separador es distinto
+            if len(df.columns) == 1:
+                df = pd.read_csv(
+                    FILE_NAME,
+                    sep=",",
+                    encoding=enc,
+                    dtype=str,
+                    keep_default_na=False,
+                )
+            break
+        except Exception:
+            continue
+
+    if df is None or df.empty:
+        st.error("❌ No se pudo leer el CSV. Comprueba el formato.")
+        st.session_state.full_data = pd.DataFrame(columns=HEADERS)
         return
-    df = pd.DataFrame(rows, columns=HEADERS)
-    df["ESTADO"]         = df["ESTADO"].astype(bool)
-    df["REPE"]           = df["REPE"].astype(bool)
-    df["CANTIDAD_REPES"] = df["CANTIDAD_REPES"].astype(int)
+
+    # ── 2. Limpiar nombres de columna y hacer matching flexible ───────────────
+    df.columns = [c.strip() for c in df.columns]
+
+    # Mapa: nombre_normalizado → nombre_real en el CSV
+    csv_col_norm = {_normalize_col(c): c for c in df.columns}
+
+    rename_map = {}
+    for h in HEADERS:
+        h_norm = _normalize_col(h)
+        if h not in df.columns and h_norm in csv_col_norm:
+            rename_map[csv_col_norm[h_norm]] = h
+
+    if rename_map:
+        df = df.rename(columns=rename_map)
+
+    # Añadir columnas que falten (mejor que fallar)
+    for h in HEADERS:
+        if h not in df.columns:
+            df[h] = ""
+
+    df = df[HEADERS].copy()
+
+    # ── 3. Limpiar valores y convertir tipos ──────────────────────────────────
+    # Strip en todas las celdas de texto
+    str_cols = ["ID", "NOMBRE / DESC", "SECCIÓN", "POSICIÓN", "ID SECCIÓN"]
+    for col in str_cols:
+        df[col] = df[col].str.strip()
+
+    # ESTADO → bool
+    df["ESTADO"] = df["ESTADO"].str.strip().str.upper().apply(
+        lambda x: "TENGO" in x
+    )
+
+    # REPE → bool
+    df["REPE"] = df["REPE"].str.strip().str.upper().apply(
+        lambda x: x == "SI"
+    )
+
+    # CANTIDAD_REPES → int
+    df["CANTIDAD_REPES"] = (
+        pd.to_numeric(df["CANTIDAD_REPES"], errors="coerce")
+        .fillna(0)
+        .astype(int)
+    )
+
+    # ── 4. Construir listas de secciones y posiciones ─────────────────────────
+    sec_set = set(df["SECCIÓN"].dropna().unique()) - {""}
+    pos_set = set(df["POSICIÓN"].dropna().unique()) - {""}
+
     st.session_state.full_data        = df
-    st.session_state.lista_secciones  = ["TODAS"] + sorted([s for s in sec_set if s])
-    st.session_state.lista_posiciones = ["TODAS"] + sorted([p for p in pos_set if p])
-    add_log_entry("SISTEMA", f"Datos cargados correctamente: {len(df)} cromos")
-    
+    st.session_state.lista_secciones  = ["TODAS"] + sorted(sec_set)
+    st.session_state.lista_posiciones = ["TODAS"] + sorted(pos_set)
+    add_log_entry("SISTEMA", f"Datos cargados: {len(df)} cromos · "
+                             f"{len(sec_set)} secciones · {len(pos_set)} posiciones")
+
+
 def save_data():
     df = st.session_state.full_data
     try:
@@ -212,26 +266,45 @@ def save_data():
     except Exception as e:
         st.error(f"Error al guardar: {e}")
 
+
 def get_filtered_df() -> pd.DataFrame:
-    df = st.session_state.full_data.copy()
+    df  = st.session_state.full_data.copy()
     if df.empty:
         return df
-    q   = st.session_state.get("search_input",     "").lower()
-    sf  = st.session_state.get("filter_seccion",   "TODAS")
-    pf  = st.session_state.get("filter_posicion",  "TODAS")
+
+    q   = st.session_state.get("search_input",    "").strip().lower()
+    sf  = st.session_state.get("filter_seccion",  "TODAS")
+    pf  = st.session_state.get("filter_posicion", "TODAS")
     cat = st.session_state.cat_filter
+
+    # ── Búsqueda de texto ─────────────────────────────────────────────────────
     if q:
-        df = df[df.apply(lambda r: any(q in str(c).lower() for c in [r["ID"], r["NOMBRE / DESC"]]), axis=1)]
-    if sf not in ("TODAS", ""):
-        df = df[df["SECCIÓN"] == sf]
-    if pf not in ("TODAS", ""):
-        df = df[df["POSICIÓN"] == pf]
+        # Busca en ID, nombre, sección y posición (más rápido que apply completo)
+        mask = (
+            df["ID"].str.lower().str.contains(q, na=False)
+            | df["NOMBRE / DESC"].str.lower().str.contains(q, na=False)
+            | df["SECCIÓN"].str.lower().str.contains(q, na=False)
+            | df["POSICIÓN"].str.lower().str.contains(q, na=False)
+        )
+        df = df[mask]
+
+    # ── Filtro sección ────────────────────────────────────────────────────────
+    if sf and sf not in ("TODAS", ""):
+        df = df[df["SECCIÓN"].str.strip() == sf.strip()]
+
+    # ── Filtro posición ───────────────────────────────────────────────────────
+    if pf and pf not in ("TODAS", ""):
+        df = df[df["POSICIÓN"].str.strip() == pf.strip()]
+
+    # ── Filtro categoría (TODOS / FALTAN / REPES) ─────────────────────────────
     if cat == "FALTAN":
-        df = df[df["ESTADO"] == False]
+        df = df[~df["ESTADO"]]
     elif cat == "REPES":
-        df = df[df["REPE"] == True]
+        df = df[df["REPE"]]
+
     return df
-    
+
+
 def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
     full    = st.session_state.full_data
     changed = False
@@ -247,20 +320,21 @@ def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
             continue
         fi     = full[mask].index[0]
         nombre = full.at[fi, "NOMBRE / DESC"]
+
         o_estado, e_estado = bool(o["ESTADO"]), bool(e["ESTADO"])
         if o_estado != e_estado:
             full.at[fi, "ESTADO"] = e_estado
             if e_estado:
                 add_log_entry("CONSEGUIDO", f"Añadido {nombre}")
             else:
-                # Reset repes igual que en tkinter
-                full.at[fi, "REPE"]           = False
-                full.at[fi, "CANTIDAD_REPES"]  = 0
+                full.at[fi, "REPE"]          = False
+                full.at[fi, "CANTIDAD_REPES"] = 0
                 add_log_entry("ELIMINADO", f"Quitado {nombre} (Reset repes)")
             changed = True
+
         o_repe, e_repe = bool(o["REPE"]), bool(e["REPE"])
         if o_repe != e_repe:
-            if full.at[fi, "ESTADO"]:   # sólo si tiene el cromo
+            if full.at[fi, "ESTADO"]:
                 full.at[fi, "REPE"] = e_repe
                 if not e_repe:
                     full.at[fi, "CANTIDAD_REPES"] = 0
@@ -268,6 +342,7 @@ def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
                 changed = True
             else:
                 st.toast("⚠️ No puedes tener repes de un cromo que no tienes.", icon="⚠️")
+
         try:
             o_qty = int(o["CANTIDAD_REPES"])
             e_qty = int(e["CANTIDAD_REPES"])
@@ -286,8 +361,10 @@ def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
     st.session_state.full_data = full
     return changed
 
+
 def set_cat_filter(f_type: str):
     st.session_state.cat_filter = f_type
+
 
 def update_stats():
     df_all = st.session_state.full_data
@@ -295,6 +372,7 @@ def update_stats():
     tengo  = int(df_all["ESTADO"].sum()) if total > 0 else 0
     pct    = tengo / total if total > 0 else 0.0
     return total, tengo, total - tengo, pct
+
 
 def procesar_sobre(lista_ids: list) -> list:
     full    = st.session_state.full_data
@@ -317,27 +395,25 @@ def procesar_sobre(lista_ids: list) -> list:
             add_log_entry("SOBRE", f"NUEVO: {p_id_norm} - {nombre}")
         else:
             actual = int(full.at[fi, "CANTIDAD_REPES"])
-            full.at[fi, "REPE"]           = True
+            full.at[fi, "REPE"]          = True
             full.at[fi, "CANTIDAD_REPES"] = actual + 1
             resumen.append(f"🔁 {p_id_norm} - {nombre} (REPE x{actual + 1})")
             add_log_entry("SOBRE", f"REPE: {p_id_norm} - {nombre} (Total: {actual+1})")
-    # historico_sobres.txt
+
     with open("historico_sobres.txt", "a", encoding="utf-8") as f:
         short = [s.split(" - ")[0].lstrip("✨🔁 ") for s in resumen]
         f.write(f"[{ahora}] {', '.join(short)}\n")
+
     st.session_state.full_data = full
     return resumen
 
-def filter_combo(query: str, full_list: list) -> list:
-    if not query:
-        return full_list
-    q = query.lower()
-    return [item for item in full_list if q in item.lower()]
 
+# ── Carga inicial ──────────────────────────────────────────────────────────────
 if not st.session_state.data_loaded:
     load_data()
     st.session_state.data_loaded = True
 
+# ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("### ⚽")
 st.title("MUNDIAL 2026 · ÁLBUM DIGITAL")
 st.markdown(
@@ -350,6 +426,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown(
         f"<h3 style='color:{g_hi};font-family:\"Segoe UI Semibold\",sans-serif;'>"
@@ -357,15 +434,26 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    # Búsqueda de texto
     st.text_input(
         "📝 JUGADOR / NOMBRE / ID",
         placeholder="Escribe para buscar...",
         key="search_input",
     )
 
-    st.selectbox("🗂️ SECCIÓN",  st.session_state.lista_secciones,  key="filter_seccion")
-    st.selectbox("🎯 POSICIÓN", st.session_state.lista_posiciones, key="filter_posicion")
+    # ── Selectboxes: reconstruir si la sección guardada ya no existe ──────────
+    secciones  = st.session_state.lista_secciones
+    posiciones = st.session_state.lista_posiciones
+
+    sec_idx = 0
+    if st.session_state.get("filter_seccion") in secciones:
+        sec_idx = secciones.index(st.session_state["filter_seccion"])
+
+    pos_idx = 0
+    if st.session_state.get("filter_posicion") in posiciones:
+        pos_idx = posiciones.index(st.session_state["filter_posicion"])
+
+    st.selectbox("🗂️ SECCIÓN",  secciones,  index=sec_idx,  key="filter_seccion")
+    st.selectbox("🎯 POSICIÓN", posiciones, index=pos_idx,  key="filter_posicion")
 
     st.markdown("---")
     total, tengo, faltan, pct = update_stats()
@@ -375,29 +463,20 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.progress(pct, text=f"{pct*100:.1f}%")
+
     st.markdown("---")
 
-    # Gestión CSV
     st.markdown(
         f"<p style='color:{t_dim};font-size:12px;'>📁 {FILE_NAME}</p>",
         unsafe_allow_html=True,
     )
     uploaded = st.file_uploader("📂 CARGAR CSV", type=["csv"], label_visibility="collapsed")
     if uploaded is not None:
-        try:
-            # Leemos el archivo línea por línea interpretando correctamente el delimitador
-            decoded_file = uploaded.read().decode("latin-1").splitlines()
-            reader = csv.reader(decoded_file, delimiter=";")
-            with open(FILE_NAME, "w", newline="", encoding="latin-1") as f:
-                writer = csv.writer(f, delimiter=";")
-                for row in reader:
-                    if row:
-                        writer.writerow(row)
-            st.session_state.full_data = None
-            st.session_state.data_loaded = False
-            st.rerun()
-        except Exception as e:
-            st.error(f"Error al procesar la subida del CSV: {e}")
+        raw = uploaded.read().decode("latin-1")
+        with open(FILE_NAME, "w", encoding="latin-1") as f:
+            f.write(raw)
+        st.session_state.data_loaded = False
+        st.rerun()
 
     col_save, col_reload = st.columns(2)
     with col_save:
@@ -410,13 +489,9 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Panel LOG
     LOG_COLORS = {
-        "CONSEGUIDO": gr_hi,
-        "ELIMINADO":  r_hi,
-        "SOBRE":      cyan,
-        "GUARDADO":   g_hi,
-        "SISTEMA":    t_mid,
+        "CONSEGUIDO": gr_hi, "ELIMINADO": r_hi, "SOBRE": cyan,
+        "GUARDADO": g_hi,    "SISTEMA":  t_mid,
     }
     with st.expander("📜 ACTIVITY LOG · LIVE", expanded=False):
         if st.session_state.logs:
@@ -431,7 +506,6 @@ with st.sidebar:
                 )
         else:
             st.caption("Sin actividad registrada.")
-
 
 c1, c2, c3, _spacer, c_sobre = st.columns([1.2, 1.2, 1.2, 3.5, 2])
 
@@ -455,7 +529,6 @@ with c_sobre:
         st.session_state.show_sobre = not st.session_state.show_sobre
         st.rerun()
 
-# filtro activo
 CAT_BADGE_COLOR = {"TODOS": g_hi, "FALTAN": r_hi, "REPES": cyan}
 st.markdown(
     f"<p style='color:{CAT_BADGE_COLOR[CAT_ACTIVE]};"
@@ -475,10 +548,10 @@ if st.session_state.show_sobre:
         unsafe_allow_html=True,
     )
     opciones_busqueda = [""] + [
-        f"{row['ID']} - {row['NOMBRE / DESC']}" 
-        for _, row in st.session_state.full_data.iterrows() 
+        f"{row['ID']} - {row['NOMBRE / DESC']}"
+        for _, row in st.session_state.full_data.iterrows()
     ]
-    
+
     selected_ids = []
     row1_cols = st.columns(4)
     row2_cols = st.columns(4)
@@ -493,7 +566,7 @@ if st.session_state.show_sobre:
             )
             val = st.selectbox(
                 f"slot_{i}",
-                opciones_busqueda,  
+                opciones_busqueda,
                 key=f"sobre_slot_{i}",
                 label_visibility="collapsed",
             )
@@ -523,7 +596,7 @@ if st.session_state.show_sobre:
         f"<hr style='border:1px solid {bd};margin:16px 0 8px;'>",
         unsafe_allow_html=True,
     )
-
+─
 filtered_df = get_filtered_df()
 
 st.markdown(
@@ -571,6 +644,5 @@ else:
         num_rows="fixed",
     )
 
-    # Detectar y aplicar cambios → equivale a handle_click
     if handle_click(filtered_df, edited):
         st.rerun()
