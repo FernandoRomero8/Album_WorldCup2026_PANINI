@@ -450,29 +450,88 @@ with st.sidebar:
     st.progress(pct, text=f"{pct*100:.1f}%")
 
     st.markdown("---")
-
+# CONFIG CSV #
+# Gestión CSV
     st.markdown(
-        f"<p style='color:{t_dim};font-size:12px;'>📁 {FILE_NAME}</p>",
+        f"<p style='color:{t_dim};font-size:12px;'>📁 CONFIGURACIÓN DE TU ÁLBUM</p>",
         unsafe_allow_html=True,
     )
     uploaded = st.file_uploader("📂 CARGAR CSV", type=["csv"], label_visibility="collapsed")
-    if uploaded is not None:
-        raw = uploaded.read().decode("latin-1")
-        with open(FILE_NAME, "w", encoding="latin-1") as f:
-            f.write(raw)
-        st.session_state.data_loaded = False
-        st.rerun()
+    
+    # WR/OR: Si el usuario sube un archivo, lo procesamos directamente en memoria sin guardarlo en el servidor
+    if uploaded is not None and not st.session_state.data_loaded:
+        try:
+            decoded_file = uploaded.read().decode("latin-1").splitlines()
+            reader = csv.reader(decoded_file, delimiter=";")
+            raw_headers = [h.strip().upper() for h in next(reader, None)]
+            
+            idx_id = raw_headers.index("ID") if "ID" in raw_headers else 0
+            idx_nom = raw_headers.index("NOMBRE / DESC") if "NOMBRE / DESC" in raw_headers else 1
+            idx_sec = [i for i, h in enumerate(raw_headers) if "SEC" in h][0]
+            idx_pos = [i for i, h in enumerate(raw_headers) if "POS" in h][0]
+            idx_est = [i for i, h in enumerate(raw_headers) if "EST" in h][0]
+            idx_rep = [i for i, h in enumerate(raw_headers) if "REP" in h and "CANT" not in h][0]
+            idx_cant = [i for i, h in enumerate(raw_headers) if "CANT" in h][0]
+            idx_idsec = [i for i, h in enumerate(raw_headers) if "ID SEC" in h or "ID_SEC" in h or h == raw_headers[-1]][0]
+            
+            rows, sec_set, pos_set = [], set(), set()
+            for r in reader:
+                if not r or len(r) < 4: 
+                    continue
+                if len(r) < len(raw_headers):
+                    r += [""] * (len(raw_headers) - len(r))
+                sec_val = r[idx_sec].strip()
+                pos_val = r[idx_pos].strip()
+                est_val = r[idx_est].strip().upper()
+                rep_val = r[idx_rep].strip().upper()
+                cant_val = r[idx_cant].strip()
+                
+                v = {
+                    "ID":             r[idx_id].strip().zfill(3),
+                    "NOMBRE / DESC":  r[idx_nom].strip(),
+                    "SECCIÓN":        sec_val,
+                    "POSICIÓN":       pos_val,
+                    "ESTADO":         "TENGO" in est_val or "✓" in est_val or est_val == "TRUE",
+                    "REPE":           rep_val in ("SI", "SÍ") or rep_val == "TRUE",
+                    "CANTIDAD_REPES": int(cant_val) if cant_val.isdigit() else 0,
+                    "ID SECCIÓN":     r[idx_idsec].strip()
+                }
+                rows.append(v)
+                if v["SECCIÓN"]: sec_set.add(v["SECCIÓN"])
+                if v["POSICIÓN"]: pos_set.add(v["POSICIÓN"])
+                
+            df = pd.DataFrame(rows, columns=HEADERS)
+            df["ESTADO"]         = df["ESTADO"].astype(bool)
+            df["REPE"]           = df["REPE"].astype(bool)
+            df["CANTIDAD_REPES"] = df["CANTIDAD_REPES"].astype(int)
+            
+            st.session_state.full_data        = df
+            st.session_state.lista_secciones  = ["TODAS"] + sorted([s for s in sec_set if s])
+            st.session_state.lista_posiciones = ["TODAS"] + sorted([p for p in pos_set if p])
+            st.session_state.data_loaded      = True
+            add_log_entry("SISTEMA", f"Tu CSV privado se ha cargado: {len(df)} cromos")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error al procesar tu archivo: {e}")
 
     col_save, col_reload = st.columns(2)
     with col_save:
-        if st.button("💾 GUARDAR", key="btn_save"):
-            save_data()
+        # Generamos la descarga al vuelo para el usuario actual
+        csv_data = get_csv_download_data()
+        st.download_button(
+            label="💾 DESCARGAR",
+            data=csv_data,
+            file_name="AlbumVirtual_Mundial_2026.csv",
+            mime="text/csv",
+            key="btn_download"
+        )
     with col_reload:
-        if st.button("🔄 RECARGAR", key="btn_reload"):
+        if st.button("🔄 REINICIAR", key="btn_reload"):
+            st.session_state.full_data = pd.DataFrame(columns=HEADERS)
             st.session_state.data_loaded = False
+            st.session_state.lista_secciones = ["TODAS"]
+            st.session_state.lista_posiciones = ["TODAS"]
             st.rerun()
-
-    st.markdown("---")
 
     LOG_COLORS = {
         "CONSEGUIDO": gr_hi, "ELIMINADO": r_hi, "SOBRE": cyan,
