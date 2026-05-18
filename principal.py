@@ -154,8 +154,8 @@ def _normalize_col(name: str) -> str:
         .replace("Ó", "O").replace("Ú", "U").replace("Ü", "U") )
 
 def load_data():
-    if not os.path.exists(FILE_NAME):
-        st.session_state.full_data = pd.DataFrame(columns=HEADERS)
+if not st.session_state.data_loaded and st.session_state.full_data.empty:
+    st.session_state.full_data = pd.DataFrame(columns=HEADERS)
         return
     df = None
     for enc in ("utf-8-sig", "latin-1", "utf-8", "cp1252"):
