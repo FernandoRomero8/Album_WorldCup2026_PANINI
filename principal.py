@@ -164,6 +164,9 @@ def load_data():
             if v["POSICIÓN"]: pos_set.add(v["POSICIÓN"])
 
     df = pd.DataFrame(rows, columns=HEADERS)
+    df["ESTADO"]         = df["ESTADO"].fillna("FALTA")
+    df["REPE"]           = df["REPE"].fillna("NO")
+    df["CANTIDAD_REPES"] = df["CANTIDAD_REPES"].fillna("0")
     df["ESTADO"]         = df["ESTADO"].astype(bool)
     df["REPE"]           = df["REPE"].astype(bool)
     df["CANTIDAD_REPES"] = df["CANTIDAD_REPES"].astype(int)
