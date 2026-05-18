@@ -575,18 +575,28 @@ st.markdown(
 if filtered_df.empty:
     st.info("No hay cromos que coincidan con los filtros activos o el álbum está vacío. Sube tu CSV en la barra lateral para empezar.")
 else:
-with st.form("contenedor_rapido"):
-    edited = st.data_editor(
-        filtered_df,
-        column_config={
-            # ... (DEJA AQUÍ TUS CONFIGURACIONES DE COLUMNAS EXACTAMENTE COMO LAS TENÍAS) ...
-        },
-        hide_index=True,
-        use_container_width=True,
-        num_rows="fixed",
-    )
-    guardar_tabla = st.form_submit_button("⚡ ACEPTAR CAMBIOS EN TABLA")
-if guardar_tabla:
-    if handle_click(filtered_df, edited):
-        guardar_en_disco() # Guarda en el archivo automáticamente al aceptar
-        st.rerun()
+    # Todo esto ahora lleva los 4 espacios obligatorios dentro del 'else'
+    with st.form("contenedor_rapido"):
+        edited = st.data_editor(
+            filtered_df,
+            column_config={
+            },
+            hide_index=True,
+            use_container_width=True,
+            num_rows="fixed",
+        )
+        guardar_tabla = st.form_submit_button("⚡ ACEPTAR CAMBIOS EN TABLA")
+
+    if guardar_tabla:
+        if handle_click(filtered_df, edited):
+            # Guardamos directamente reescribiendo el archivo local
+            try:
+                df_to_save = st.session_state.full_data.copy()
+                df_to_save["ESTADO"] = df_to_save["ESTADO"].map(lambda x: "TENGO" if x else "FALTA")
+                df_to_save["REPE"] = df_to_save["REPE"].map(lambda x: "SI" if x else "NO")
+                df_to_save.to_csv("AlbumVirtual_Mundial_2026.csv", sep=";", index=False, encoding="latin-1")
+                add_log_entry("GUARDADO", "Cambios aplicados directamente en el CSV")
+                st.toast("💾 ¡Archivo actualizado en tu ordenador!", icon="✅")
+            except Exception as e:
+                st.error(f"No se pudo guardar el archivo: {e}") 
+            st.rerun()
