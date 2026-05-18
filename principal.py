@@ -13,14 +13,13 @@ st.set_page_config(
 C = {
     "bg_deep":   "#06090f", "bg_panel": "#0c1220", "bg_card":  "#101828",
     "bg_input":  "#080e1a", "gold_hi":  "#ffd700", "gold_lo":  "#c9960c",
-    "gold_glow": "#ffe566", "cyan":     "#00d4ff", "green_hi": "#05d68a",
+    "gold_glow": "#ffe566", "cyan":      "#00d4ff", "green_hi": "#05d68a",
     "green_bg":  "#021a0e", "red_hi":   "#ff4060", "red_bg":   "#1a0008",
     "text_hi":   "#ddeeff", "text_mid": "#7a9ec0", "text_dim": "#354a61",
     "border":    "#1c3352", "sep":      "#111d30", "row_alt":  "#0b1522",
 }
 
-HEADERS    = ["ID", "NOMBRE / DESC", "SECCIÓN", "POSICIÓN",
-              "ESTADO", "REPE", "CANTIDAD_REPES", "ID SECCIÓN"]
+HEADERS    = ["ID", "NOMBRE / DESC", "SECCIÓN", "POSICIÓN", "ESTADO", "REPE", "CANTIDAD_REPES", "ID SECCIÓN"]
 FILE_NAME  = "AlbumVirtual_Mundial_2026.csv"
 LOG_FILE   = "registro.csv"
 
@@ -44,9 +43,10 @@ st.markdown(f"""
     border-right: 1px solid {bd};
 }}
 [data-testid="stSidebar"] * {{ color: {t_hi} !important; }}
-/* ── Buttons ── */
-.stButton>button {{
-    background: linear-gradient(135deg, {g_hi}, {g_lo});
+
+/* ── Botón Principal de Descarga ── */
+div.stDownloadButton > button {{
+    background: linear-gradient(135deg, {g_hi}, {g_lo}) !important;
     color: {bg_d} !important;
     font-family: "Segoe UI Semibold", sans-serif;
     font-size: 13px; font-weight: bold; border: none;
@@ -54,11 +54,25 @@ st.markdown(f"""
     box-shadow: 0 0 8px {g_hi}33;
     transition: all .2s ease-in-out; width: 100%;
 }}
-.stButton>button:hover {{
-    background: {g_gl};
-    box-shadow: 0 0 15px {g_gl}aa;
+div.stDownloadButton > button:hover {{
+    background: {g_gl} !important;
+    box-shadow: 0 0 15px {g_gl}aa !important;
     transform: scale(1.02);
 }}
+
+/* ── Botones Estándar (Filtros y Acciones) ── */
+.stButton>button {{
+    background-color: {bg_c} !important;
+    color: {t_hi} !important;
+    border: 1px solid {bd} !important;
+    border-radius: 6px; padding: 6px 14px;
+    transition: all .2s; width: 100%;
+}}
+.stButton>button:hover {{
+    border-color: {cyan} !important;
+    color: {cyan} !important;
+}}
+
 /* ── Data editor ── */
 div[data-testid="stDataEditor"] {{
     background-color: {bg_c};
@@ -124,6 +138,7 @@ DEFAULTS = {
     "data_loaded":      False,
     "lista_secciones":  ["TODAS"],
     "lista_posiciones": ["TODAS"],
+    "last_uploaded":    None
 }
 for _k, _v in DEFAULTS.items():
     if _k not in st.session_state:
@@ -138,108 +153,29 @@ def add_log_entry(accion: str, detalle: str):
         "DETALLE": detalle,
     }
     st.session_state.logs.insert(0, entry)
-    file_exists = os.path.isfile(LOG_FILE)
-    with open(LOG_FILE, mode="a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        if not file_exists:
-            w.writerow(["FECHA", "HORA", "ACCION", "DETALLE"])
-        w.writerow([entry["FECHA"], entry["HORA"], accion, detalle])
-
+    try:
+        file_exists = os.path.isfile(LOG_FILE)
+        with open(LOG_FILE, mode="a", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            if not file_exists:
+                w.writerow(["FECHA", "HORA", "ACCION", "DETALLE"])
+            w.writerow([entry["FECHA"], entry["HORA"], accion, detalle])
+    except Exception:
+        pass
 
 def _normalize_col(name: str) -> str:
-    """Normaliza un nombre de columna quitando tildes y pasando a mayúsculas."""
     return (
         name.strip().upper()
         .replace("Á", "A").replace("É", "E").replace("Í", "I")
         .replace("Ó", "O").replace("Ú", "U").replace("Ü", "U") )
 
 def load_data():
-    if not st.session_state.data_loaded and st.session_state.full_data.empty:
+    # WR/OR: Estructura vacía privada por defecto al iniciar la pestaña
+    if st.session_state.full_data.empty:
         st.session_state.full_data = pd.DataFrame(columns=HEADERS)
-        return
-    df = None
-    for enc in ("utf-8-sig", "latin-1", "utf-8", "cp1252"):
-        try:
-            df = pd.read_csv(
-                FILE_NAME,
-                sep=";",
-                encoding=enc,
-                dtype=str,
-                keep_default_na=False,
-            )
-            # Si la primera columna contiene ";", el separador es distinto
-            if len(df.columns) == 1:
-                df = pd.read_csv(
-                    FILE_NAME,
-                    sep=",",
-                    encoding=enc,
-                    dtype=str,
-                    keep_default_na=False,
-                )
-            break
-        except Exception:
-            continue
+        st.session_state.lista_secciones  = ["TODAS"]
+        st.session_state.lista_posiciones = ["TODAS"]
 
-    if df is None or df.empty:
-        st.error("❌ No se pudo leer el CSV. Comprueba el formato.")
-        st.session_state.full_data = pd.DataFrame(columns=HEADERS)
-        return
-
-    # ── 2. Limpiar nombres de columna y hacer matching flexible ───────────────
-    df.columns = [c.strip() for c in df.columns]
-
-    # Mapa: nombre_normalizado → nombre_real en el CSV
-    csv_col_norm = {_normalize_col(c): c for c in df.columns}
-
-    rename_map = {}
-    for h in HEADERS:
-        h_norm = _normalize_col(h)
-        if h not in df.columns and h_norm in csv_col_norm:
-            rename_map[csv_col_norm[h_norm]] = h
-
-    if rename_map:
-        df = df.rename(columns=rename_map)
-
-    # Añadir columnas que falten (mejor que fallar)
-    for h in HEADERS:
-        if h not in df.columns:
-            df[h] = ""
-
-    df = df[HEADERS].copy()
-
-    # ── 3. Limpiar valores y convertir tipos ──────────────────────────────────
-    # Strip en todas las celdas de texto
-    str_cols = ["ID", "NOMBRE / DESC", "SECCIÓN", "POSICIÓN", "ID SECCIÓN"]
-    for col in str_cols:
-        df[col] = df[col].str.strip()
-
-    # ESTADO → bool
-    df["ESTADO"] = df["ESTADO"].str.strip().str.upper().apply(
-        lambda x: "TENGO" in x
-    )
-
-    # REPE → bool
-    df["REPE"] = df["REPE"].str.strip().str.upper().apply(
-        lambda x: x == "SI"
-    )
-
-    # CANTIDAD_REPES → int
-    df["CANTIDAD_REPES"] = (
-        pd.to_numeric(df["CANTIDAD_REPES"], errors="coerce")
-        .fillna(0)
-        .astype(int)
-    )
-
-    # ── 4. Construir listas de secciones y posiciones ─────────────────────────
-    sec_set = set(df["SECCIÓN"].dropna().unique()) - {""}
-    pos_set = set(df["POSICIÓN"].dropna().unique()) - {""}
-
-    st.session_state.full_data        = df
-    st.session_state.lista_secciones  = ["TODAS"] + sorted(sec_set)
-    st.session_state.lista_posiciones = ["TODAS"] + sorted(pos_set)
-    add_log_entry("SISTEMA", f"Datos cargados: {len(df)} cromos · "
-                             f"{len(sec_set)} secciones · {len(pos_set)} posiciones")
-    
 def get_csv_download_data():
     df = st.session_state.full_data
     output = csv.StringIO()
@@ -262,9 +198,7 @@ def get_filtered_df() -> pd.DataFrame:
     pf  = st.session_state.get("filter_posicion", "TODAS")
     cat = st.session_state.cat_filter
 
-    # ── Búsqueda de texto ─────────────────────────────────────────────────────
     if q:
-        # Busca en ID, nombre, sección y posición (más rápido que apply completo)
         mask = (
             df["ID"].str.lower().str.contains(q, na=False)
             | df["NOMBRE / DESC"].str.lower().str.contains(q, na=False)
@@ -273,22 +207,18 @@ def get_filtered_df() -> pd.DataFrame:
         )
         df = df[mask]
 
-    # ── Filtro sección ────────────────────────────────────────────────────────
     if sf and sf not in ("TODAS", ""):
         df = df[df["SECCIÓN"].str.strip() == sf.strip()]
 
-    # ── Filtro posición ───────────────────────────────────────────────────────
     if pf and pf not in ("TODAS", ""):
         df = df[df["POSICIÓN"].str.strip() == pf.strip()]
 
-    # ── Filtro categoría (TODOS / FALTAN / REPES) ─────────────────────────────
     if cat == "FALTAN":
         df = df[~df["ESTADO"]]
     elif cat == "REPES":
         df = df[df["REPE"]]
 
     return df
-
 
 def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
     full    = st.session_state.full_data
@@ -346,10 +276,8 @@ def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
     st.session_state.full_data = full
     return changed
 
-
 def set_cat_filter(f_type: str):
     st.session_state.cat_filter = f_type
-
 
 def update_stats():
     df_all = st.session_state.full_data
@@ -357,7 +285,6 @@ def update_stats():
     tengo  = int(df_all["ESTADO"].sum()) if total > 0 else 0
     pct    = tengo / total if total > 0 else 0.0
     return total, tengo, total - tengo, pct
-
 
 def procesar_sobre(lista_ids: list) -> list:
     full    = st.session_state.full_data
@@ -385,13 +312,15 @@ def procesar_sobre(lista_ids: list) -> list:
             resumen.append(f"🔁 {p_id_norm} - {nombre} (REPE x{actual + 1})")
             add_log_entry("SOBRE", f"REPE: {p_id_norm} - {nombre} (Total: {actual+1})")
 
-    with open("historico_sobres.txt", "a", encoding="utf-8") as f:
-        short = [s.split(" - ")[0].lstrip("✨🔁 ") for s in resumen]
-        f.write(f"[{ahora}] {', '.join(short)}\n")
+    try:
+        with open("historico_sobres.txt", "a", encoding="utf-8") as f:
+            short = [s.split(" - ")[0].lstrip("✨🔁 ") for s in resumen]
+            f.write(f"[{ahora}] {', '.join(short)}\n")
+    except Exception:
+        pass
 
     st.session_state.full_data = full
     return resumen
-
 
 # ── Carga inicial ──────────────────────────────────────────────────────────────
 if not st.session_state.data_loaded:
@@ -425,7 +354,6 @@ with st.sidebar:
         key="search_input",
     )
 
-    # ── Selectboxes: reconstruir si la sección guardada ya no existe ──────────
     secciones  = st.session_state.lista_secciones
     posiciones = st.session_state.lista_posiciones
 
@@ -450,16 +378,15 @@ with st.sidebar:
     st.progress(pct, text=f"{pct*100:.1f}%")
 
     st.markdown("---")
-# CONFIG CSV #
-# Gestión CSV
     st.markdown(
         f"<p style='color:{t_dim};font-size:12px;'>📁 CONFIGURACIÓN DE TU ÁLBUM</p>",
         unsafe_allow_html=True,
     )
+    
     uploaded = st.file_uploader("📂 CARGAR CSV", type=["csv"], label_visibility="collapsed")
     
-    # WR/OR: Si el usuario sube un archivo, lo procesamos directamente en memoria sin guardarlo en el servidor
-    if uploaded is not None and not st.session_state.data_loaded:
+    # WR/OR: Escucha el buffer de subida y procesa inmediatamente al detectar un archivo nuevo
+    if uploaded is not None and st.session_state.last_uploaded != uploaded.name:
         try:
             decoded_file = uploaded.read().decode("latin-1").splitlines()
             reader = csv.reader(decoded_file, delimiter=";")
@@ -508,7 +435,7 @@ with st.sidebar:
             st.session_state.full_data        = df
             st.session_state.lista_secciones  = ["TODAS"] + sorted([s for s in sec_set if s])
             st.session_state.lista_posiciones = ["TODAS"] + sorted([p for p in pos_set if p])
-            st.session_state.data_loaded      = True
+            st.session_state.last_uploaded    = uploaded.name
             add_log_entry("SISTEMA", f"Tu CSV privado se ha cargado: {len(df)} cromos")
             st.rerun()
         except Exception as e:
@@ -516,7 +443,6 @@ with st.sidebar:
 
     col_save, col_reload = st.columns(2)
     with col_save:
-        # Generamos la descarga al vuelo para el usuario actual
         csv_data = get_csv_download_data()
         st.download_button(
             label="💾 DESCARGAR",
@@ -528,9 +454,9 @@ with st.sidebar:
     with col_reload:
         if st.button("🔄 REINICIAR", key="btn_reload"):
             st.session_state.full_data = pd.DataFrame(columns=HEADERS)
-            st.session_state.data_loaded = False
             st.session_state.lista_secciones = ["TODAS"]
             st.session_state.lista_posiciones = ["TODAS"]
+            st.session_state.last_uploaded = None
             st.rerun()
 
     LOG_COLORS = {
@@ -649,7 +575,7 @@ st.markdown(
 )
 
 if filtered_df.empty:
-    st.info("No hay cromos que coincidan con los filtros activos.")
+    st.info("No hay cromos que coincidan con los filtros activos o el álbum está vacío. Sube tu CSV en la barra lateral para empezar.")
 else:
     edited = st.data_editor(
         filtered_df,
