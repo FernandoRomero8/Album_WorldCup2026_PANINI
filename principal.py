@@ -443,17 +443,15 @@ with st.sidebar:
 
     col_save, col_reload = st.columns(2)
     with col_save:
-        
-def guardar_en_disco():
-    df_to_save = st.session_state.full_data.copy()
-    df_to_save["ESTADO"] = df_to_save["ESTADO"].map(lambda x: "TENGO" if x else "FALTA")
-    df_to_save["REPE"] = df_to_save["REPE"].map(lambda x: "SI" if x else "NO")
-    df_to_save.to_csv("AlbumVirtual_Mundial_2026.csv", sep=";", index=False, encoding="latin-1")
-    add_log_entry("GUARDADO", "Cambios aplicados directamente en el CSV")
-    st.toast("💾 ¡Archivo actualizado en tu ordenador!", icon="✅")
-
-if st.button("💾 GUARDAR CAMBIOS", key="btn_save_local"):
-    guardar_en_disco()
+        def guardar_en_disco():
+            df_to_save = st.session_state.full_data.copy()
+            df_to_save["ESTADO"] = df_to_save["ESTADO"].map(lambda x: "TENGO" if x else "FALTA")
+            df_to_save["REPE"] = df_to_save["REPE"].map(lambda x: "SI" if x else "NO")
+            df_to_save.to_csv("AlbumVirtual_Mundial_2026.csv", sep=";", index=False, encoding="latin-1")
+            add_log_entry("GUARDADO", "Cambios aplicados directamente en el CSV")
+            st.toast("💾 ¡Archivo actualizado en tu ordenador!", icon="✅")
+        if st.button("💾 GUARDAR CAMBIOS", key="btn_save_local"):
+            guardar_en_disco()
     with col_reload:
         if st.button("🔄 REINICIAR", key="btn_reload"):
             st.session_state.full_data = pd.DataFrame(columns=HEADERS)
