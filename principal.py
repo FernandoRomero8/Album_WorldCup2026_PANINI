@@ -581,7 +581,6 @@ if st.session_state.show_sobre:
         f"<hr style='border:1px solid {bd};margin:16px 0 8px;'>",
         unsafe_allow_html=True,
     )
-─
 filtered_df = get_filtered_df()
 
 st.markdown(
