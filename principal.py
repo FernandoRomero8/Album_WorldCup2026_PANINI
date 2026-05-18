@@ -128,8 +128,7 @@ DEFAULTS = {
 for _k, _v in DEFAULTS.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
-
-
+        
 def add_log_entry(accion: str, detalle: str):
     ahora = datetime.now()
     entry = {
@@ -152,20 +151,12 @@ def _normalize_col(name: str) -> str:
     return (
         name.strip().upper()
         .replace("Á", "A").replace("É", "E").replace("Í", "I")
-        .replace("Ó", "O").replace("Ú", "U").replace("Ü", "U")
-    )
-
+        .replace("Ó", "O").replace("Ú", "U").replace("Ü", "U") )
 
 def load_data():
-    """
-    Lee el CSV con detección automática de encoding (utf-8-sig → latin-1 → utf-8)
-    y hace matching flexible de columnas para sobrevivir tildes mal codificadas.
-    """
     if not os.path.exists(FILE_NAME):
         st.session_state.full_data = pd.DataFrame(columns=HEADERS)
         return
-
-    # ── 1. Intentar leer con distintos encodings ──────────────────────────────
     df = None
     for enc in ("utf-8-sig", "latin-1", "utf-8", "cp1252"):
         try:
@@ -248,24 +239,18 @@ def load_data():
     st.session_state.lista_posiciones = ["TODAS"] + sorted(pos_set)
     add_log_entry("SISTEMA", f"Datos cargados: {len(df)} cromos · "
                              f"{len(sec_set)} secciones · {len(pos_set)} posiciones")
-
-
-def save_data():
+    
+def get_csv_download_data():
     df = st.session_state.full_data
-    try:
-        with open(FILE_NAME, mode="w", newline="", encoding="latin-1") as f:
-            w = csv.DictWriter(f, fieldnames=HEADERS, delimiter=";")
-            w.writeheader()
-            for _, row in df.iterrows():
-                r = dict(row)
-                r["ESTADO"] = "TENGO" if r["ESTADO"] else "FALTA"
-                r["REPE"]   = "SI"    if r["REPE"]   else "NO"
-                w.writerow(r)
-        add_log_entry("GUARDADO", "Base de datos actualizada")
-        st.toast("✅ ¡Datos guardados!", icon="💾")
-    except Exception as e:
-        st.error(f"Error al guardar: {e}")
-
+    output = csv.StringIO()
+    w = csv.DictWriter(output, fieldnames=HEADERS, delimiter=";")
+    w.writeheader()
+    for _, row in df.iterrows():
+        r = dict(row)
+        r["ESTADO"] = "TENGO" if r["ESTADO"] else "FALTA"
+        r["REPE"]   = "SI"    if r["REPE"]   else "NO"
+        w.writerow(r)
+    return output.getvalue()
 
 def get_filtered_df() -> pd.DataFrame:
     df  = st.session_state.full_data.copy()
