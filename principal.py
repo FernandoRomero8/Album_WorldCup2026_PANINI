@@ -26,7 +26,7 @@ LOG_FILE   = "registro.csv"
 g_hi   = C["gold_hi"];  g_lo  = C["gold_lo"];  g_gl  = C["gold_glow"]
 bg_d   = C["bg_deep"];  bg_p  = C["bg_panel"]; bg_c  = C["bg_card"]
 bd     = C["border"];   t_hi  = C["text_hi"];  t_mid = C["text_mid"]
-t_dim  = C["text_dim"]; cyan  = C["cyan"];     r_hi  = C["red_hi"]
+t_dim  = C["text_dim"]; cyan  = C["cyan"];      r_hi  = C["red_hi"]
 gr_hi  = C["green_hi"]; sep   = C["sep"]
 
 st.markdown(f"""
@@ -421,7 +421,7 @@ with st.sidebar:
                     "ESTADO":         "TENGO" in est_val or "✓" in est_val or est_val == "TRUE",
                     "REPE":           rep_val in ("SI", "SÍ") or rep_val == "TRUE",
                     "CANTIDAD_REPES": int(cant_val) if cant_val.isdigit() else 0,
-                    "ID SECCIÓN":     r[idx_idsec].strip()
+                    "ID SECCIÓN":      r[idx_idsec].strip()
                 }
                 rows.append(v)
                 if v["SECCIÓN"]: sec_set.add(v["SECCIÓN"])
@@ -441,19 +441,41 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Error al procesar tu archivo: {e}")
 
-    col_save, col_reload = st.columns(2)
-    with col_save:
-        def guardar_en_disco():
-            df_to_save = st.session_state.full_data.copy()
-            df_to_save["ESTADO"] = df_to_save["ESTADO"].map(lambda x: "TENGO" if x else "FALTA")
-            df_to_save["REPE"] = df_to_save["REPE"].map(lambda x: "SI" if x else "NO")
-            df_to_save.to_csv("AlbumVirtual_Mundial_2026.csv", sep=";", index=False, encoding="latin-1")
-            add_log_entry("GUARDADO", "Cambios aplicados directamente en el CSV")
-            st.toast("💾 ¡Archivo actualizado en tu ordenador!", icon="✅")
-        if st.button("💾 GUARDAR CAMBIOS", key="btn_save_local"):
-            guardar_en_disco()
-    with col_reload:
-        if st.button("🔄 REINICIAR", key="btn_reload"):
+    # WR/OR: Definimos la función vacía de seguridad para evitar errores al procesar sobres
+    def guardar_en_disco():
+        pass
+
+    # ── NUEVO PANEL DE DESCARGA CON AVISO PREVIO ──
+    if not st.session_state.full_data.empty:
+        csv_data = get_csv_download_data()
+        
+        st.markdown("⚠️ **¡AVISO IMPORTANTE!**")
+        st.markdown(
+            f"<p style='color:{t_mid};font-size:12px;margin-top:-10px;'>"
+            "Para elegir dónde guardar el archivo y poder machacar el viejo en tu Escritorio de golpe, "
+            "activa esto en tu navegador:</p>", 
+            unsafe_allow_html=True
+        )
+        
+        with st.expander("🌐 Activar reemplazo en Chrome / Edge"):
+            st.markdown(
+                "1. Entra en **Configuración** del navegador (los 3 puntos arriba a la derecha).\n"
+                "2. Ve a **Descargas** (menú izquierdo).\n"
+                "3. Activa: **'Preguntar dónde se guardará cada archivo antes de descargarlo'**."
+            )
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        st.download_button(
+            label="💾 DESCARGAR CSV MODIFICADO",
+            data=csv_data,
+            file_name="AlbumVirtual_Mundial_2026.csv",
+            mime="text/csv",
+            key="btn_download_premium"
+        )
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🔄 REINICIAR APP", key="btn_reload_clean"):
             st.session_state.full_data = pd.DataFrame(columns=HEADERS)
             st.session_state.lista_secciones = ["TODAS"]
             st.session_state.lista_posiciones = ["TODAS"]
@@ -566,6 +588,7 @@ if st.session_state.show_sobre:
         f"<hr style='border:1px solid {bd};margin:16px 0 8px;'>",
         unsafe_allow_html=True,
     )
+
 filtered_df = get_filtered_df()
 st.markdown(
     f"<p style='color:{t_dim};font-size:12px;margin-bottom:4px;'>"
@@ -575,12 +598,10 @@ st.markdown(
 if filtered_df.empty:
     st.info("No hay cromos que coincidan con los filtros activos o el álbum está vacío. Sube tu CSV en la barra lateral para empezar.")
 else:
-    # Todo esto ahora lleva los 4 espacios obligatorios dentro del 'else'
     with st.form("contenedor_rapido"):
         edited = st.data_editor(
             filtered_df,
-            column_config={
-            },
+            column_config={},
             hide_index=True,
             use_container_width=True,
             num_rows="fixed",
@@ -589,14 +610,5 @@ else:
 
     if guardar_tabla:
         if handle_click(filtered_df, edited):
-            # Guardamos directamente reescribiendo el archivo local
-            try:
-                df_to_save = st.session_state.full_data.copy()
-                df_to_save["ESTADO"] = df_to_save["ESTADO"].map(lambda x: "TENGO" if x else "FALTA")
-                df_to_save["REPE"] = df_to_save["REPE"].map(lambda x: "SI" if x else "NO")
-                df_to_save.to_csv("AlbumVirtual_Mundial_2026.csv", sep=";", index=False, encoding="latin-1")
-                add_log_entry("GUARDADO", "Cambios aplicados directamente en el CSV")
-                st.toast("💾 ¡Archivo actualizado en tu ordenador!", icon="✅")
-            except Exception as e:
-                st.error(f"No se pudo guardar el archivo: {e}") 
+            st.toast("⚡ Cambios aplicados. ¡Pulsa el botón dorado de la barra lateral para bajar tu CSV!", icon="ℹ️")
             st.rerun()
