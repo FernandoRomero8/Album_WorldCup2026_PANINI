@@ -19,7 +19,7 @@ C = {
     "border":    "#1c3352", "sep":      "#111d30", "row_alt":  "#0b1522",
 }
 
-# WR/OR: Headers estandarizados sin tildes para evitar conflictos
+# WR/OR: Headers estandarizados sin tildes para evitar conflictos en base de datos
 HEADERS    = ["ID", "NOMBRE / DESC", "SECCION", "POSICION", "ESTADO", "REPE", "CANTIDAD_REPES", "ID SECCION"]
 FILE_NAME  = "AlbumVirtual_Mundial_2026.csv"
 LOG_FILE   = "registro.csv"
@@ -164,12 +164,6 @@ def add_log_entry(accion: str, detalle: str):
     except Exception:
         pass
 
-def _normalize_col(name: str) -> str:
-    return (
-        name.strip().upper()
-        .replace("Á", "A").replace("É", "E").replace("Í", "I")
-        .replace("Ó", "O").replace("Ú", "U").replace("Ü", "U") )
-
 def load_data():
     if st.session_state.full_data.empty:
         st.session_state.full_data = pd.DataFrame(columns=HEADERS)
@@ -186,7 +180,10 @@ def get_csv_download_data():
         r["ESTADO"] = "TENGO" if r["ESTADO"] else "FALTA"
         r["REPE"]   = "SI"    if r["REPE"]   else "NO"
         w.writerow(r)
-    return output.getvalue()
+    
+    # WR/OR: Convertimos la salida a binario codificado en UTF-8-SIG (con BOM) 
+    # para forzar a Excel a leer los acentos directamente sin romper nada.
+    return output.getvalue().encode("utf-8-sig")
 
 def get_filtered_df() -> pd.DataFrame:
     df  = st.session_state.full_data.copy()
@@ -385,10 +382,18 @@ with st.sidebar:
     
     uploaded = st.file_uploader("📂 CARGAR CSV", type=["csv"], label_visibility="collapsed")
     
-    # WR/OR: Escucha el buffer de subida y procesa inmediatamente al detectar un archivo nuevo
+    # WR/OR: Procesa de forma inteligente aplicando fallback automático de codificación
     if uploaded is not None and st.session_state.last_uploaded != uploaded.name:
         try:
-            decoded_file = uploaded.read().decode("latin-1").splitlines()
+            raw_bytes = uploaded.read()
+            # Intenta cargar primero con la nueva codificación con firma, si falla tira de latin-1 tradicional
+            try:
+                decoded_file = raw_bytes.decode("utf-8-sig").splitlines()
+                if len(decoded_file) > 0 and ";" not in decoded_file[0] and "," in decoded_file[0]:
+                     raise ValueError()
+            except Exception:
+                decoded_file = raw_bytes.decode("latin-1").splitlines()
+
             reader = csv.reader(decoded_file, delimiter=";")
             raw_headers = [h.strip().upper() for h in next(reader, None)]
             
