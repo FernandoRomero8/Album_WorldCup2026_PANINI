@@ -5,7 +5,7 @@ import os
 import csv
 
 st.set_page_config(
-    page_title="PANINI 2026 · ÁLBUM DIGITAL",
+    page_title="PANINI 2026 · ALBUM DIGITAL",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -19,7 +19,8 @@ C = {
     "border":    "#1c3352", "sep":      "#111d30", "row_alt":  "#0b1522",
 }
 
-HEADERS    = ["ID", "NOMBRE / DESC", "SECCIÓN", "POSICIÓN", "ESTADO", "REPE", "CANTIDAD_REPES", "ID SECCIÓN"]
+# WR/OR: Headers estandarizados sin tildes para evitar conflictos
+HEADERS    = ["ID", "NOMBRE / DESC", "SECCION", "POSICION", "ESTADO", "REPE", "CANTIDAD_REPES", "ID SECCION"]
 FILE_NAME  = "AlbumVirtual_Mundial_2026.csv"
 LOG_FILE   = "registro.csv"
 
@@ -44,7 +45,7 @@ st.markdown(f"""
 }}
 [data-testid="stSidebar"] * {{ color: {t_hi} !important; }}
 
-/* ── Botón Principal de Descarga ── */
+/* ── Boton Principal de Descarga ── */
 div.stDownloadButton > button {{
     background: linear-gradient(135deg, {g_hi}, {g_lo}) !important;
     color: {bg_d} !important;
@@ -60,7 +61,7 @@ div.stDownloadButton > button:hover {{
     transform: scale(1.02);
 }}
 
-/* ── Botones Estándar (Filtros y Acciones) ── */
+/* ── Botones Estandar (Filtros y Acciones) ── */
 .stButton>button {{
     background-color: {bg_c} !important;
     color: {t_hi} !important;
@@ -170,7 +171,6 @@ def _normalize_col(name: str) -> str:
         .replace("Ó", "O").replace("Ú", "U").replace("Ü", "U") )
 
 def load_data():
-    # WR/OR: Estructura vacía privada por defecto al iniciar la pestaña
     if st.session_state.full_data.empty:
         st.session_state.full_data = pd.DataFrame(columns=HEADERS)
         st.session_state.lista_secciones  = ["TODAS"]
@@ -202,16 +202,16 @@ def get_filtered_df() -> pd.DataFrame:
         mask = (
             df["ID"].str.lower().str.contains(q, na=False)
             | df["NOMBRE / DESC"].str.lower().str.contains(q, na=False)
-            | df["SECCIÓN"].str.lower().str.contains(q, na=False)
-            | df["POSICIÓN"].str.lower().str.contains(q, na=False)
+            | df["SECCION"].str.lower().str.contains(q, na=False)
+            | df["POSICION"].str.lower().str.contains(q, na=False)
         )
         df = df[mask]
 
     if sf and sf not in ("TODAS", ""):
-        df = df[df["SECCIÓN"].str.strip() == sf.strip()]
+        df = df[df["SECCION"].str.strip() == sf.strip()]
 
     if pf and pf not in ("TODAS", ""):
-        df = df[df["POSICIÓN"].str.strip() == pf.strip()]
+        df = df[df["POSICION"].str.strip() == pf.strip()]
 
     if cat == "FALTAN":
         df = df[~df["ESTADO"]]
@@ -240,7 +240,7 @@ def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
         if o_estado != e_estado:
             full.at[fi, "ESTADO"] = e_estado
             if e_estado:
-                add_log_entry("CONSEGUIDO", f"Añadido {nombre}")
+                add_log_entry("CONSEGUIDO", f"Anadido {nombre}")
             else:
                 full.at[fi, "REPE"]          = False
                 full.at[fi, "CANTIDAD_REPES"] = 0
@@ -329,7 +329,7 @@ if not st.session_state.data_loaded:
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("### ⚽")
-st.title("MUNDIAL 2026 · ÁLBUM DIGITAL")
+st.title("MUNDIAL 2026 · ALBUM DIGITAL")
 st.markdown(
     f"<p style='color:{t_mid};font-family:Consolas;margin-top:-15px;'>"
     "P A N I N I   C O L L E C T I O N   T R A C K E R</p>",
@@ -344,7 +344,7 @@ st.markdown(
 with st.sidebar:
     st.markdown(
         f"<h3 style='color:{g_hi};font-family:\"Segoe UI Semibold\",sans-serif;'>"
-        "FILTROS DE BÚSQUEDA</h3>",
+        "FILTROS DE BUSQUEDA</h3>",
         unsafe_allow_html=True,
     )
 
@@ -365,8 +365,8 @@ with st.sidebar:
     if st.session_state.get("filter_posicion") in posiciones:
         pos_idx = posiciones.index(st.session_state["filter_posicion"])
 
-    st.selectbox("🗂️ SECCIÓN",  secciones,  index=sec_idx,  key="filter_seccion")
-    st.selectbox("🎯 POSICIÓN", posiciones, index=pos_idx,  key="filter_posicion")
+    st.selectbox("🗂️ SECCION",  secciones,  index=sec_idx,  key="filter_seccion")
+    st.selectbox("🎯 POSICION", posiciones, index=pos_idx,  key="filter_posicion")
 
     st.markdown("---")
     total, tengo, faltan, pct = update_stats()
@@ -379,7 +379,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown(
-        f"<p style='color:{t_dim};font-size:12px;'>📁 CONFIGURACIÓN DE TU ÁLBUM</p>",
+        f"<p style='color:{t_dim};font-size:12px;'>📁 CONFIGURACION DE TU ALBUM</p>",
         unsafe_allow_html=True,
     )
     
@@ -416,16 +416,16 @@ with st.sidebar:
                 v = {
                     "ID":             r[idx_id].strip().zfill(3),
                     "NOMBRE / DESC":  r[idx_nom].strip(),
-                    "SECCIÓN":        sec_val,
-                    "POSICIÓN":       pos_val,
+                    "SECCION":        sec_val,
+                    "POSICION":       pos_val,
                     "ESTADO":         "TENGO" in est_val or "✓" in est_val or est_val == "TRUE",
                     "REPE":           rep_val in ("SI", "SÍ") or rep_val == "TRUE",
                     "CANTIDAD_REPES": int(cant_val) if cant_val.isdigit() else 0,
-                    "ID SECCIÓN":      r[idx_idsec].strip()
+                    "ID SECCION":      r[idx_idsec].strip()
                 }
                 rows.append(v)
-                if v["SECCIÓN"]: sec_set.add(v["SECCIÓN"])
-                if v["POSICIÓN"]: pos_set.add(v["POSICIÓN"])
+                if v["SECCION"]: sec_set.add(v["SECCION"])
+                if v["POSICION"]: pos_set.add(v["POSICION"])
                 
             df = pd.DataFrame(rows, columns=HEADERS)
             df["ESTADO"]         = df["ESTADO"].astype(bool)
@@ -441,7 +441,6 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Error al procesar tu archivo: {e}")
 
-    # WR/OR: Definimos la función vacía de seguridad para evitar errores al procesar sobres
     def guardar_en_disco():
         pass
 
@@ -452,16 +451,16 @@ with st.sidebar:
         st.markdown("⚠️ **¡AVISO IMPORTANTE!**")
         st.markdown(
             f"<p style='color:{t_mid};font-size:12px;margin-top:-10px;'>"
-            "Para elegir dónde guardar el archivo y poder machacar el viejo en tu Escritorio de golpe, "
+            "Para elegir donde guardar el archivo y poder machacar el viejo en tu Escritorio de golpe, "
             "activa esto en tu navegador:</p>", 
             unsafe_allow_html=True
         )
         
         with st.expander("🌐 Activar reemplazo en Chrome / Edge"):
             st.markdown(
-                "1. Entra en **Configuración** del navegador (los 3 puntos arriba a la derecha).\n"
+                "1. Entra en **Configuracion** del navegador (los 3 puntos arriba a la derecha).\n"
                 "2. Ve a **Descargas** (menú izquierdo).\n"
-                "3. Activa: **'Preguntar dónde se guardará cada archivo antes de descargarlo'**."
+                "3. Activa: **'Preguntar donde se guardara cada archivo antes de descargarlo'**."
             )
         
         st.markdown("<br>", unsafe_allow_html=True)
@@ -578,7 +577,7 @@ if st.session_state.show_sobre:
                     st.success(line)
                 st.rerun()
             else:
-                st.warning("No has seleccionado ningún cromo válido.")
+                st.warning("No has seleccionado ningun cromo valido.")
     with btn_cancel:
         if st.button("❌  CANCELAR", key="btn_cancel_sobre"):
             st.session_state.show_sobre = False
@@ -596,7 +595,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 if filtered_df.empty:
-    st.info("No hay cromos que coincidan con los filtros activos o el álbum está vacío. Sube tu CSV en la barra lateral para empezar.")
+    st.info("No hay cromos que coincidan con los filtros activos o el album esta vacio. Sube tu CSV en la barra lateral para empezar.")
 else:
     with st.form("contenedor_rapido"):
         edited = st.data_editor(
@@ -610,5 +609,5 @@ else:
 
     if guardar_tabla:
         if handle_click(filtered_df, edited):
-            st.toast("⚡ Cambios aplicados. ¡Pulsa el botón dorado de la barra lateral para bajar tu CSV!", icon="ℹ️")
+            st.toast("⚡ Cambios aplicados. ¡Pulsa el boton dorado de la barra lateral para bajar tu CSV!", icon="ℹ️")
             st.rerun()
