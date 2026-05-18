@@ -115,18 +115,6 @@ details summary {{
 }}
 </style>
 """, unsafe_allow_html=True)
-
-if "full_data" not in st.session_state:
-    st.session_state.full_data = None
-st.sidebar.markdown(f"<h3 style='color:{C['gold_hi']};'>📂 TU ÁLBUM (.CSV)</h3>", unsafe_allow_html=True)
-uploaded_file = st.sidebar.file_uploader("Sube tu archivo para empezar", type=["csv"])
-if uploaded_file is not None and st.session_state.full_data is None:
-    # Lee el archivo respetando tu codificación latin-1 y separador ;
-    df = pd.read_csv(uploaded_file, sep=";", encoding="latin-1")
-    # Fuerza a que los IDs mantengan el formato de 3 dígitos (ej: 001, 045)
-    df['ID'] = df['ID'].astype(str).str.zfill(3)
-    st.session_state.full_data = df
-
 DEFAULTS = {
     "full_data":        pd.DataFrame(columns=HEADERS),
     "cat_filter":       "TODOS",
