@@ -213,7 +213,6 @@ def save_data():
         st.error(f"Error al guardar: {e}")
 
 def get_filtered_df() -> pd.DataFrame:
-    """Equivale a AlbumPro2026.apply_filters — devuelve la vista filtrada."""
     df = st.session_state.full_data.copy()
     if df.empty:
         return df
@@ -376,7 +375,6 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.progress(pct, text=f"{pct*100:.1f}%")
-
     st.markdown("---")
 
     # Gestión CSV
@@ -386,11 +384,20 @@ with st.sidebar:
     )
     uploaded = st.file_uploader("📂 CARGAR CSV", type=["csv"], label_visibility="collapsed")
     if uploaded is not None:
-        raw = uploaded.read().decode("latin-1")
-        with open(FILE_NAME, "w", encoding="latin-1") as f:
-            f.write(raw)
-        st.session_state.data_loaded = False
-        st.rerun()
+        try:
+            # Leemos el archivo línea por línea interpretando correctamente el delimitador
+            decoded_file = uploaded.read().decode("latin-1").splitlines()
+            reader = csv.reader(decoded_file, delimiter=";")
+            with open(FILE_NAME, "w", newline="", encoding="latin-1") as f:
+                writer = csv.writer(f, delimiter=";")
+                for row in reader:
+                    if row:
+                        writer.writerow(row)
+            st.session_state.full_data = None
+            st.session_state.data_loaded = False
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error al procesar la subida del CSV: {e}")
 
     col_save, col_reload = st.columns(2)
     with col_save:
