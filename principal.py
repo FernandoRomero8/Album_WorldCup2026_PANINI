@@ -151,33 +151,51 @@ def load_data():
     rows, sec_set, pos_set = [], set(), set()
     try:
         with open(FILE_NAME, mode="r", encoding="latin-1") as f:
-            # Forzamos explícitamente el uso de punto y coma
-            reader = csv.DictReader(f, delimiter=";")
-            for row in reader:
-                v = {h: row.get(h, "").strip() for h in HEADERS}
-                
-                # Normalización de textos a estados booleanos reales
-                v["ESTADO"]         = "TENGO" in str(v["ESTADO"]).upper() or "✓" in str(v["ESTADO"])
-                v["REPE"]           = str(v["REPE"]).upper() in ("SI", "SÍ") or "✓" in str(v["REPE"])
-                v["CANTIDAD_REPES"] = int(v["CANTIDAD_REPES"]) if str(v["CANTIDAD_REPES"]).isdigit() else 0
-                
+            reader = csv.reader(f, delimiter=";")
+            # Leemos la primera línea (cabecera) y limpiamos espacios y tildes invisibles
+            raw_headers = [h.strip().upper() for h in next(reader, None)]
+            idx_id = raw_headers.index("ID") if "ID" in raw_headers else 0
+            idx_nom = raw_headers.index("NOMBRE / DESC") if "NOMBRE / DESC" in raw_headers else 1
+            idx_sec = [i for i, h in enumerate(raw_headers) if "SEC" in h][0]
+            idx_pos = [i for i, h in enumerate(raw_headers) if "POS" in h][0]
+            idx_est = [i for i, h in enumerate(raw_headers) if "EST" in h][0]
+            idx_rep = [i for i, h in enumerate(raw_headers) if "REP" in h and "CANT" not in h][0]
+            idx_cant = [i for i, h in enumerate(raw_headers) if "CANT" in h][0]
+            idx_idsec = [i for i, h in enumerate(raw_headers) if "ID SEC" in h or "ID_SEC" in h or h == raw_headers[-1]][0]
+            for r in reader:
+                if not r or len(r) < 4: 
+                    continue
+                if len(r) < len(raw_headers):
+                    r += [""] * (len(raw_headers) - len(r))
+                sec_val = r[idx_sec].strip()
+                pos_val = r[idx_pos].strip()
+                est_val = r[idx_est].strip().upper()
+                rep_val = r[idx_rep].strip().upper()
+                cant_val = r[idx_cant].strip()
+                v = {
+                    "ID":             r[idx_id].strip().zfill(3),
+                    "NOMBRE / DESC":  r[idx_nom].strip(),
+                    "SECCIÓN":        sec_val,
+                    "POSICIÓN":       pos_val,
+                    "ESTADO":         "TENGO" in est_val or "✓" in est_val or est_val == "TRUE",
+                    "REPE":           rep_val in ("SI", "SÍ") or rep_val == "TRUE",
+                    "CANTIDAD_REPES": int(cant_val) if cant_val.isdigit() else 0,
+                    "ID SECCIÓN":     r[idx_idsec].strip()}        
                 rows.append(v)
                 if v["SECCIÓN"]: sec_set.add(v["SECCIÓN"])
                 if v["POSICIÓN"]: pos_set.add(v["POSICIÓN"])
     except Exception as e:
-        st.error(f"Error al cargar el CSV: {e}")
+        st.error(f"Error crítico al procesar estructura de columnas del CSV: {e}")
         return
-
     df = pd.DataFrame(rows, columns=HEADERS)
     df["ESTADO"]         = df["ESTADO"].astype(bool)
     df["REPE"]           = df["REPE"].astype(bool)
     df["CANTIDAD_REPES"] = df["CANTIDAD_REPES"].astype(int)
-
     st.session_state.full_data        = df
-    st.session_state.lista_secciones  = ["TODAS"] + sorted(list(sec_set))
-    st.session_state.lista_posiciones = ["TODAS"] + sorted(list(pos_set))
-    add_log_entry("SISTEMA", f"Datos cargados: {len(df)} cromos")
-
+    st.session_state.lista_secciones  = ["TODAS"] + sorted([s for s in sec_set if s])
+    st.session_state.lista_posiciones = ["TODAS"] + sorted([p for p in pos_set if p])
+    add_log_entry("SISTEMA", f"Datos cargados correctamente: {len(df)} cromos")
+    
 def save_data():
     df = st.session_state.full_data
     try:
