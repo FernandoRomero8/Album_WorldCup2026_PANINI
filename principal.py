@@ -443,14 +443,17 @@ with st.sidebar:
 
     col_save, col_reload = st.columns(2)
     with col_save:
-        csv_data = get_csv_download_data()
-        st.download_button(
-            label="💾 DESCARGAR",
-            data=csv_data,
-            file_name="AlbumVirtual_Mundial_2026.csv",
-            mime="text/csv",
-            key="btn_download"
-        )
+        
+def guardar_en_disco():
+    df_to_save = st.session_state.full_data.copy()
+    df_to_save["ESTADO"] = df_to_save["ESTADO"].map(lambda x: "TENGO" if x else "FALTA")
+    df_to_save["REPE"] = df_to_save["REPE"].map(lambda x: "SI" if x else "NO")
+    df_to_save.to_csv("AlbumVirtual_Mundial_2026.csv", sep=";", index=False, encoding="latin-1")
+    add_log_entry("GUARDADO", "Cambios aplicados directamente en el CSV")
+    st.toast("💾 ¡Archivo actualizado en tu ordenador!", icon="✅")
+
+if st.button("💾 GUARDAR CAMBIOS", key="btn_save_local"):
+    guardar_en_disco()
     with col_reload:
         if st.button("🔄 REINICIAR", key="btn_reload"):
             st.session_state.full_data = pd.DataFrame(columns=HEADERS)
@@ -556,7 +559,6 @@ if st.session_state.show_sobre:
                 st.rerun()
             else:
                 st.warning("No has seleccionado ningún cromo válido.")
-
     with btn_cancel:
         if st.button("❌  CANCELAR", key="btn_cancel_sobre"):
             st.session_state.show_sobre = False
@@ -567,51 +569,26 @@ if st.session_state.show_sobre:
         unsafe_allow_html=True,
     )
 filtered_df = get_filtered_df()
-
 st.markdown(
     f"<p style='color:{t_dim};font-size:12px;margin-bottom:4px;'>"
     f"Mostrando <b style='color:{t_mid};'>{len(filtered_df)}</b> cromos</p>",
     unsafe_allow_html=True,
 )
-
 if filtered_df.empty:
     st.info("No hay cromos que coincidan con los filtros activos o el álbum está vacío. Sube tu CSV en la barra lateral para empezar.")
 else:
+with st.form("contenedor_rapido"):
     edited = st.data_editor(
         filtered_df,
         column_config={
-            "ID": st.column_config.TextColumn(
-                "ID", disabled=True, width="small"),
-            "NOMBRE / DESC": st.column_config.TextColumn(
-                "NOMBRE / DESC", disabled=True, width="large"),
-            "SECCIÓN": st.column_config.TextColumn(
-                "SECCIÓN", disabled=True, width="medium"),
-            "POSICIÓN": st.column_config.TextColumn(
-                "POSICIÓN", disabled=True, width="small"),
-            "ESTADO": st.column_config.CheckboxColumn(
-                "✅ TENGO",
-                help="Marca si tienes el cromo",
-                width="small",
-            ),
-            "REPE": st.column_config.CheckboxColumn(
-                "🔁 REPE",
-                help="¿Tienes repetidos?",
-                width="small",
-            ),
-            "CANTIDAD_REPES": st.column_config.NumberColumn(
-                "# REPES",
-                help="Cantidad de repetidos (+1 / −1)",
-                min_value=0,
-                step=1,
-                width="small",
-            ),
-            "ID SECCIÓN": st.column_config.TextColumn(
-                "ID SEC.", disabled=True, width="small"),
+            # ... (DEJA AQUÍ TUS CONFIGURACIONES DE COLUMNAS EXACTAMENTE COMO LAS TENÍAS) ...
         },
         hide_index=True,
         use_container_width=True,
         num_rows="fixed",
     )
-
+    guardar_tabla = st.form_submit_button("⚡ ACEPTAR CAMBIOS EN TABLA")
+if guardar_tabla:
     if handle_click(filtered_df, edited):
+        guardar_en_disco() # Guarda en el archivo automáticamente al aceptar
         st.rerun()
