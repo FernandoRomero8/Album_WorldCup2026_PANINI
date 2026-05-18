@@ -129,7 +129,6 @@ for _k, _v in DEFAULTS.items():
         st.session_state[_k] = _v
 
 def add_log_entry(accion: str, detalle: str):
-    """Equivale a AlbumPro2026.add_log_entry — escribe en memoria y en CSV."""
     ahora = datetime.now()
     entry = {
         "FECHA":   ahora.strftime("%Y-%m-%d"),
@@ -145,40 +144,41 @@ def add_log_entry(accion: str, detalle: str):
             w.writerow(["FECHA", "HORA", "ACCION", "DETALLE"])
         w.writerow([entry["FECHA"], entry["HORA"], accion, detalle])
 
-
 def load_data():
-    """Equivale a AlbumPro2026.load_data."""
     if not os.path.exists(FILE_NAME):
         st.session_state.full_data = pd.DataFrame(columns=HEADERS)
         return
     rows, sec_set, pos_set = [], set(), set()
-    with open(FILE_NAME, mode="r", encoding="latin-1") as f:
-        for row in csv.DictReader(f, delimiter=";"):
-            v = {h: row.get(h, "").strip() for h in HEADERS}
-            # Normalizar igual que en tkinter
-            v["ESTADO"]         = "TENGO" in v["ESTADO"].upper()          # bool
-            v["REPE"]           = v["REPE"].upper() == "SI"                # bool
-            v["CANTIDAD_REPES"] = int(v["CANTIDAD_REPES"]) if str(v["CANTIDAD_REPES"]).isdigit() else 0
-            rows.append(v)
-            if v["SECCIÓN"]: sec_set.add(v["SECCIÓN"])
-            if v["POSICIÓN"]: pos_set.add(v["POSICIÓN"])
+    try:
+        with open(FILE_NAME, mode="r", encoding="latin-1") as f:
+            # Forzamos explícitamente el uso de punto y coma
+            reader = csv.DictReader(f, delimiter=";")
+            for row in reader:
+                v = {h: row.get(h, "").strip() for h in HEADERS}
+                
+                # Normalización de textos a estados booleanos reales
+                v["ESTADO"]         = "TENGO" in str(v["ESTADO"]).upper() or "✓" in str(v["ESTADO"])
+                v["REPE"]           = str(v["REPE"]).upper() in ("SI", "SÍ") or "✓" in str(v["REPE"])
+                v["CANTIDAD_REPES"] = int(v["CANTIDAD_REPES"]) if str(v["CANTIDAD_REPES"]).isdigit() else 0
+                
+                rows.append(v)
+                if v["SECCIÓN"]: sec_set.add(v["SECCIÓN"])
+                if v["POSICIÓN"]: pos_set.add(v["POSICIÓN"])
+    except Exception as e:
+        st.error(f"Error al cargar el CSV: {e}")
+        return
 
     df = pd.DataFrame(rows, columns=HEADERS)
-    df["ESTADO"]         = df["ESTADO"].fillna("FALTA")
-    df["REPE"]           = df["REPE"].fillna("NO")
-    df["CANTIDAD_REPES"] = df["CANTIDAD_REPES"].fillna("0")
     df["ESTADO"]         = df["ESTADO"].astype(bool)
     df["REPE"]           = df["REPE"].astype(bool)
     df["CANTIDAD_REPES"] = df["CANTIDAD_REPES"].astype(int)
 
     st.session_state.full_data        = df
-    st.session_state.lista_secciones  = ["TODAS"] + sorted(sec_set)
-    st.session_state.lista_posiciones = ["TODAS"] + sorted(pos_set)
+    st.session_state.lista_secciones  = ["TODAS"] + sorted(list(sec_set))
+    st.session_state.lista_posiciones = ["TODAS"] + sorted(list(pos_set))
     add_log_entry("SISTEMA", f"Datos cargados: {len(df)} cromos")
 
-
 def save_data():
-    """Equivale a AlbumPro2026.save_data."""
     df = st.session_state.full_data
     try:
         with open(FILE_NAME, mode="w", newline="", encoding="latin-1") as f:
@@ -190,42 +190,32 @@ def save_data():
                 r["REPE"]   = "SI"    if r["REPE"]   else "NO"
                 w.writerow(r)
         add_log_entry("GUARDADO", "Base de datos actualizada")
-        st.toast("✅ ¡Datos guardados! WR/OR OK.", icon="💾")
+        st.toast("✅ ¡Datos guardados!", icon="💾")
     except Exception as e:
         st.error(f"Error al guardar: {e}")
 
-
 def get_filtered_df() -> pd.DataFrame:
     """Equivale a AlbumPro2026.apply_filters — devuelve la vista filtrada."""
-    df  = st.session_state.full_data.copy()
+    df = st.session_state.full_data.copy()
     if df.empty:
         return df
-
     q   = st.session_state.get("search_input",     "").lower()
     sf  = st.session_state.get("filter_seccion",   "TODAS")
     pf  = st.session_state.get("filter_posicion",  "TODAS")
     cat = st.session_state.cat_filter
-
     if q:
-        df = df[df.apply(lambda r: any(q in str(c).lower() for c in r), axis=1)]
+        df = df[df.apply(lambda r: any(q in str(c).lower() for c in [r["ID"], r["NOMBRE / DESC"]]), axis=1)]
     if sf not in ("TODAS", ""):
         df = df[df["SECCIÓN"] == sf]
     if pf not in ("TODAS", ""):
         df = df[df["POSICIÓN"] == pf]
     if cat == "FALTAN":
-        df = df[~df["ESTADO"]]
+        df = df[df["ESTADO"] == False]
     elif cat == "REPES":
-        df = df[df["REPE"]]
-
+        df = df[df["REPE"] == True]
     return df
-
-
+    
 def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
-    """
-    Equivale a AlbumPro2026.handle_click + show_repe_menu.
-    Detecta cambios en las columnas editables y actualiza full_data + log.
-    Retorna True si hubo algún cambio (dispara st.rerun()).
-    """
     full    = st.session_state.full_data
     changed = False
     orig_r  = original_df.reset_index(drop=True)
@@ -280,11 +270,9 @@ def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
     return changed
 
 def set_cat_filter(f_type: str):
-    """Equivale a AlbumPro2026.set_cat_filter."""
     st.session_state.cat_filter = f_type
 
 def update_stats():
-    """Equivale a AlbumPro2026.update_stats — devuelve métricas."""
     df_all = st.session_state.full_data
     total  = len(df_all)
     tengo  = int(df_all["ESTADO"].sum()) if total > 0 else 0
@@ -292,7 +280,6 @@ def update_stats():
     return total, tengo, total - tengo, pct
 
 def procesar_sobre(lista_ids: list) -> list:
-    """Equivale a AlbumPro2026.procesar_sobre."""
     full    = st.session_state.full_data
     resumen = []
     ahora   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -317,17 +304,14 @@ def procesar_sobre(lista_ids: list) -> list:
             full.at[fi, "CANTIDAD_REPES"] = actual + 1
             resumen.append(f"🔁 {p_id_norm} - {nombre} (REPE x{actual + 1})")
             add_log_entry("SOBRE", f"REPE: {p_id_norm} - {nombre} (Total: {actual+1})")
-
-    # historico_sobres.txt igual que en tkinter
+    # historico_sobres.txt
     with open("historico_sobres.txt", "a", encoding="utf-8") as f:
         short = [s.split(" - ")[0].lstrip("✨🔁 ") for s in resumen]
         f.write(f"[{ahora}] {', '.join(short)}\n")
-
     st.session_state.full_data = full
     return resumen
 
 def filter_combo(query: str, full_list: list) -> list:
-    """Equivale a AlbumPro2026.filter_combo — filtra la lista de opciones."""
     if not query:
         return full_list
     q = query.lower()
@@ -356,7 +340,7 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    # Búsqueda de texto (igual que search_var + trace en tkinter)
+    # Búsqueda de texto
     st.text_input(
         "📝 JUGADOR / NOMBRE / ID",
         placeholder="Escribe para buscar...",
