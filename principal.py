@@ -19,33 +19,29 @@ C = {
     "border":    "#1c3352", "sep":      "#111d30", "row_alt":  "#0b1522",
 }
 
-# WR/OR: Headers estandarizados sin tildes para evitar conflictos en base de datos
-HEADERS    = ["ID", "NOMBRE / DESC", "SECCION", "POSICION", "ESTADO", "REPE", "CANTIDAD_REPES", "ID SECCION"]
-FILE_NAME  = "AlbumVirtual_Mundial_2026.csv"
-LOG_FILE   = "registro.csv"
+HEADERS   = ["ID", "NOMBRE / DESC", "SECCION", "POSICION", "ESTADO", "REPE", "CANTIDAD_REPES", "ID SECCION"]
+FILE_NAME = "AlbumVirtual_Mundial_2026.csv"
+LOG_FILE  = "registro.csv"
 
-g_hi   = C["gold_hi"];  g_lo  = C["gold_lo"];  g_gl  = C["gold_glow"]
-bg_d   = C["bg_deep"];  bg_p  = C["bg_panel"]; bg_c  = C["bg_card"]
-bd     = C["border"];   t_hi  = C["text_hi"];  t_mid = C["text_mid"]
-t_dim  = C["text_dim"]; cyan  = C["cyan"];      r_hi  = C["red_hi"]
-gr_hi  = C["green_hi"]; sep   = C["sep"]
+g_hi  = C["gold_hi"];  g_lo  = C["gold_lo"];  g_gl  = C["gold_glow"]
+bg_d  = C["bg_deep"];  bg_p  = C["bg_panel"]; bg_c  = C["bg_card"]
+bd    = C["border"];   t_hi  = C["text_hi"];  t_mid = C["text_mid"]
+t_dim = C["text_dim"]; cyan  = C["cyan"];     r_hi  = C["red_hi"]
+gr_hi = C["green_hi"]; sep   = C["sep"]
 
 st.markdown(f"""
 <style>
-/* ── General ── */
 .stApp {{
     background-color: {bg_d};
     color: {t_hi};
     font-family: "Segoe UI", sans-serif;
 }}
-/* ── Sidebar ── */
 [data-testid="stSidebar"] {{
     background-color: {bg_p};
     border-right: 1px solid {bd};
 }}
 [data-testid="stSidebar"] * {{ color: {t_hi} !important; }}
 
-/* ── Boton Principal de Descarga ── */
 div.stDownloadButton > button {{
     background: linear-gradient(135deg, {g_hi}, {g_lo}) !important;
     color: {bg_d} !important;
@@ -60,8 +56,6 @@ div.stDownloadButton > button:hover {{
     box-shadow: 0 0 15px {g_gl}aa !important;
     transform: scale(1.02);
 }}
-
-/* ── Botones Estandar (Filtros y Acciones) ── */
 .stButton>button {{
     background-color: {bg_c} !important;
     color: {t_hi} !important;
@@ -73,8 +67,6 @@ div.stDownloadButton > button:hover {{
     border-color: {cyan} !important;
     color: {cyan} !important;
 }}
-
-/* ── Data editor ── */
 div[data-testid="stDataEditor"] {{
     background-color: {bg_c};
     border: 1px solid {bd};
@@ -94,7 +86,6 @@ div[data-testid="stDataEditor"] td {{
     color: {t_hi} !important;
     border-bottom: 1px solid {sep} !important;
 }}
-/* ── Selectbox / Inputs ── */
 div[data-testid="stSelectbox"] > div,
 div[data-testid="stTextInput"] > div > div {{
     background-color: {C["bg_input"]} !important;
@@ -102,17 +93,14 @@ div[data-testid="stTextInput"] > div > div {{
     border-radius: 6px !important;
     color: {t_hi} !important;
 }}
-/* ── Progress bar ── */
 div[data-testid="stProgress"] > div > div {{
     background-color: {gr_hi} !important;
 }}
-/* ── Expander ── */
 details summary {{
     color: {cyan} !important;
     font-family: "Consolas", monospace;
     font-size: 12px;
 }}
-/* ── Pack opening panel ── */
 .sobre-panel {{
     background: {bg_p};
     border: 1px solid {cyan};
@@ -120,13 +108,35 @@ details summary {{
     padding: 20px;
     margin-bottom: 16px;
 }}
-/* ── Scrollbar ── */
 ::-webkit-scrollbar {{ width: 10px; height: 10px; }}
 ::-webkit-scrollbar-track {{ background: {bg_d}; }}
 ::-webkit-scrollbar-thumb {{
     background: {bg_p};
     border: 2px solid {bg_d};
     border-radius: 4px;
+}}
+.footer {{
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: {bg_p};
+    border-top: 1px solid {bd};
+    padding: 8px 24px;
+    text-align: center;
+    z-index: 9999;
+    font-family: "Consolas", monospace;
+    font-size: 11px;
+    color: {t_dim};
+}}
+.footer span.brand {{
+    color: {g_hi};
+    font-weight: bold;
+    letter-spacing: 1px;
+}}
+.footer span.sep {{
+    color: {bd};
+    margin: 0 10px;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -144,7 +154,8 @@ DEFAULTS = {
 for _k, _v in DEFAULTS.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
-        
+
+
 def add_log_entry(accion: str, detalle: str):
     ahora = datetime.now()
     entry = {
@@ -164,26 +175,26 @@ def add_log_entry(accion: str, detalle: str):
     except Exception:
         pass
 
+
 def load_data():
     if st.session_state.full_data.empty:
-        st.session_state.full_data = pd.DataFrame(columns=HEADERS)
+        st.session_state.full_data        = pd.DataFrame(columns=HEADERS)
         st.session_state.lista_secciones  = ["TODAS"]
         st.session_state.lista_posiciones = ["TODAS"]
 
+
 def get_csv_download_data():
-    df = st.session_state.full_data
+    df     = st.session_state.full_data
     output = csv.StringIO()
-    w = csv.DictWriter(output, fieldnames=HEADERS, delimiter=";")
+    w      = csv.DictWriter(output, fieldnames=HEADERS, delimiter=";")
     w.writeheader()
     for _, row in df.iterrows():
-        r = dict(row)
+        r           = dict(row)
         r["ESTADO"] = "TENGO" if r["ESTADO"] else "FALTA"
         r["REPE"]   = "SI"    if r["REPE"]   else "NO"
         w.writerow(r)
-    
-    # WR/OR: Convertimos la salida a binario codificado en UTF-8-SIG (con BOM) 
-    # para forzar a Excel a leer los acentos directamente sin romper nada.
     return output.getvalue().encode("utf-8-sig")
+
 
 def get_filtered_df() -> pd.DataFrame:
     df  = st.session_state.full_data.copy()
@@ -217,6 +228,7 @@ def get_filtered_df() -> pd.DataFrame:
 
     return df
 
+
 def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
     full    = st.session_state.full_data
     changed = False
@@ -224,9 +236,8 @@ def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
     edit_r  = edited_df.reset_index(drop=True)
 
     for i in range(len(orig_r)):
-        o = orig_r.iloc[i]
-        e = edit_r.iloc[i]
-
+        o    = orig_r.iloc[i]
+        e    = edit_r.iloc[i]
         mask = full["ID"] == o["ID"]
         if not mask.any():
             continue
@@ -239,8 +250,8 @@ def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
             if e_estado:
                 add_log_entry("CONSEGUIDO", f"Anadido {nombre}")
             else:
-                full.at[fi, "REPE"]          = False
-                full.at[fi, "CANTIDAD_REPES"] = 0
+                full.at[fi, "REPE"]           = False
+                full.at[fi, "CANTIDAD_REPES"]  = 0
                 add_log_entry("ELIMINADO", f"Quitado {nombre} (Reset repes)")
             changed = True
 
@@ -273,8 +284,10 @@ def handle_click(original_df: pd.DataFrame, edited_df: pd.DataFrame) -> bool:
     st.session_state.full_data = full
     return changed
 
+
 def set_cat_filter(f_type: str):
     st.session_state.cat_filter = f_type
+
 
 def update_stats():
     df_all = st.session_state.full_data
@@ -282,6 +295,7 @@ def update_stats():
     tengo  = int(df_all["ESTADO"].sum()) if total > 0 else 0
     pct    = tengo / total if total > 0 else 0.0
     return total, tengo, total - tengo, pct
+
 
 def procesar_sobre(lista_ids: list) -> list:
     full    = st.session_state.full_data
@@ -304,8 +318,8 @@ def procesar_sobre(lista_ids: list) -> list:
             add_log_entry("SOBRE", f"NUEVO: {p_id_norm} - {nombre}")
         else:
             actual = int(full.at[fi, "CANTIDAD_REPES"])
-            full.at[fi, "REPE"]          = True
-            full.at[fi, "CANTIDAD_REPES"] = actual + 1
+            full.at[fi, "REPE"]           = True
+            full.at[fi, "CANTIDAD_REPES"]  = actual + 1
             resumen.append(f"🔁 {p_id_norm} - {nombre} (REPE x{actual + 1})")
             add_log_entry("SOBRE", f"REPE: {p_id_norm} - {nombre} (Total: {actual+1})")
 
@@ -319,12 +333,13 @@ def procesar_sobre(lista_ids: list) -> list:
     st.session_state.full_data = full
     return resumen
 
-# ── Carga inicial ──────────────────────────────────────────────────────────────
+
+# Carga inicial
 if not st.session_state.data_loaded:
     load_data()
     st.session_state.data_loaded = True
 
-# ── Header ────────────────────────────────────────────────────────────────────
+# Header
 st.markdown("### ⚽")
 st.title("MUNDIAL 2026 · ALBUM DIGITAL")
 st.markdown(
@@ -337,7 +352,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# Sidebar
 with st.sidebar:
     st.markdown(
         f"<h3 style='color:{g_hi};font-family:\"Segoe UI Semibold\",sans-serif;'>"
@@ -362,8 +377,8 @@ with st.sidebar:
     if st.session_state.get("filter_posicion") in posiciones:
         pos_idx = posiciones.index(st.session_state["filter_posicion"])
 
-    st.selectbox("🗂️ SECCION",  secciones,  index=sec_idx,  key="filter_seccion")
-    st.selectbox("🎯 POSICION", posiciones, index=pos_idx,  key="filter_posicion")
+    st.selectbox("🗂️ SECCION",  secciones,  index=sec_idx, key="filter_seccion")
+    st.selectbox("🎯 POSICION", posiciones, index=pos_idx, key="filter_posicion")
 
     st.markdown("---")
     total, tengo, faltan, pct = update_stats()
@@ -379,45 +394,43 @@ with st.sidebar:
         f"<p style='color:{t_dim};font-size:12px;'>📁 CONFIGURACION DE TU ALBUM</p>",
         unsafe_allow_html=True,
     )
-    
+
     uploaded = st.file_uploader("📂 CARGAR CSV", type=["csv"], label_visibility="collapsed")
-    
-    # WR/OR: Procesa de forma inteligente aplicando fallback automático de codificación
+
     if uploaded is not None and st.session_state.last_uploaded != uploaded.name:
         try:
             raw_bytes = uploaded.read()
-            # Intenta cargar primero con la nueva codificación con firma, si falla tira de latin-1 tradicional
             try:
                 decoded_file = raw_bytes.decode("utf-8-sig").splitlines()
                 if len(decoded_file) > 0 and ";" not in decoded_file[0] and "," in decoded_file[0]:
-                     raise ValueError()
+                    raise ValueError()
             except Exception:
                 decoded_file = raw_bytes.decode("latin-1").splitlines()
 
-            reader = csv.reader(decoded_file, delimiter=";")
+            reader      = csv.reader(decoded_file, delimiter=";")
             raw_headers = [h.strip().upper() for h in next(reader, None)]
-            
-            idx_id = raw_headers.index("ID") if "ID" in raw_headers else 0
-            idx_nom = raw_headers.index("NOMBRE / DESC") if "NOMBRE / DESC" in raw_headers else 1
-            idx_sec = [i for i, h in enumerate(raw_headers) if "SEC" in h][0]
-            idx_pos = [i for i, h in enumerate(raw_headers) if "POS" in h][0]
-            idx_est = [i for i, h in enumerate(raw_headers) if "EST" in h][0]
-            idx_rep = [i for i, h in enumerate(raw_headers) if "REP" in h and "CANT" not in h][0]
-            idx_cant = [i for i, h in enumerate(raw_headers) if "CANT" in h][0]
+
+            idx_id    = raw_headers.index("ID") if "ID" in raw_headers else 0
+            idx_nom   = raw_headers.index("NOMBRE / DESC") if "NOMBRE / DESC" in raw_headers else 1
+            idx_sec   = [i for i, h in enumerate(raw_headers) if "SEC" in h][0]
+            idx_pos   = [i for i, h in enumerate(raw_headers) if "POS" in h][0]
+            idx_est   = [i for i, h in enumerate(raw_headers) if "EST" in h][0]
+            idx_rep   = [i for i, h in enumerate(raw_headers) if "REP" in h and "CANT" not in h][0]
+            idx_cant  = [i for i, h in enumerate(raw_headers) if "CANT" in h][0]
             idx_idsec = [i for i, h in enumerate(raw_headers) if "ID SEC" in h or "ID_SEC" in h or h == raw_headers[-1]][0]
-            
+
             rows, sec_set, pos_set = [], set(), set()
             for r in reader:
-                if not r or len(r) < 4: 
+                if not r or len(r) < 4:
                     continue
                 if len(r) < len(raw_headers):
                     r += [""] * (len(raw_headers) - len(r))
-                sec_val = r[idx_sec].strip()
-                pos_val = r[idx_pos].strip()
-                est_val = r[idx_est].strip().upper()
-                rep_val = r[idx_rep].strip().upper()
+                sec_val  = r[idx_sec].strip()
+                pos_val  = r[idx_pos].strip()
+                est_val  = r[idx_est].strip().upper()
+                rep_val  = r[idx_rep].strip().upper()
                 cant_val = r[idx_cant].strip()
-                
+
                 v = {
                     "ID":             r[idx_id].strip().zfill(3),
                     "NOMBRE / DESC":  r[idx_nom].strip(),
@@ -426,50 +439,46 @@ with st.sidebar:
                     "ESTADO":         "TENGO" in est_val or "✓" in est_val or est_val == "TRUE",
                     "REPE":           rep_val in ("SI", "SÍ") or rep_val == "TRUE",
                     "CANTIDAD_REPES": int(cant_val) if cant_val.isdigit() else 0,
-                    "ID SECCION":      r[idx_idsec].strip()
+                    "ID SECCION":     r[idx_idsec].strip()
                 }
                 rows.append(v)
                 if v["SECCION"]: sec_set.add(v["SECCION"])
                 if v["POSICION"]: pos_set.add(v["POSICION"])
-                
-            df = pd.DataFrame(rows, columns=HEADERS)
-            df["ESTADO"]         = df["ESTADO"].astype(bool)
-            df["REPE"]           = df["REPE"].astype(bool)
-            df["CANTIDAD_REPES"] = df["CANTIDAD_REPES"].astype(int)
-            
+
+            df                    = pd.DataFrame(rows, columns=HEADERS)
+            df["ESTADO"]          = df["ESTADO"].astype(bool)
+            df["REPE"]            = df["REPE"].astype(bool)
+            df["CANTIDAD_REPES"]  = df["CANTIDAD_REPES"].astype(int)
+
             st.session_state.full_data        = df
             st.session_state.lista_secciones  = ["TODAS"] + sorted([s for s in sec_set if s])
             st.session_state.lista_posiciones = ["TODAS"] + sorted([p for p in pos_set if p])
             st.session_state.last_uploaded    = uploaded.name
-            add_log_entry("SISTEMA", f"Tu CSV privado se ha cargado: {len(df)} cromos")
+            add_log_entry("SISTEMA", f"CSV cargado: {len(df)} cromos")
             st.rerun()
         except Exception as e:
-            st.error(f"Error al procesar tu archivo: {e}")
+            st.error(f"Error al procesar el archivo: {e}")
 
-    def guardar_en_disco():
-        pass
-
-    # ── NUEVO PANEL DE DESCARGA CON AVISO PREVIO ──
     if not st.session_state.full_data.empty:
         csv_data = get_csv_download_data()
-        
+
         st.markdown("⚠️ **¡AVISO IMPORTANTE!**")
         st.markdown(
             f"<p style='color:{t_mid};font-size:12px;margin-top:-10px;'>"
             "Para elegir donde guardar el archivo y poder machacar el viejo en tu Escritorio de golpe, "
-            "activa esto en tu navegador:</p>", 
+            "activa esto en tu navegador:</p>",
             unsafe_allow_html=True
         )
-        
+
         with st.expander("🌐 Activar reemplazo en Chrome / Edge"):
             st.markdown(
                 "1. Entra en **Configuracion** del navegador (los 3 puntos arriba a la derecha).\n"
                 "2. Ve a **Descargas** (menú izquierdo).\n"
                 "3. Activa: **'Preguntar donde se guardara cada archivo antes de descargarlo'**."
             )
-        
+
         st.markdown("<br>", unsafe_allow_html=True)
-        
+
         st.download_button(
             label="💾 DESCARGAR CSV MODIFICADO",
             data=csv_data,
@@ -477,18 +486,18 @@ with st.sidebar:
             mime="text/csv",
             key="btn_download_premium"
         )
-        
+
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🔄 REINICIAR APP", key="btn_reload_clean"):
-            st.session_state.full_data = pd.DataFrame(columns=HEADERS)
-            st.session_state.lista_secciones = ["TODAS"]
+            st.session_state.full_data        = pd.DataFrame(columns=HEADERS)
+            st.session_state.lista_secciones  = ["TODAS"]
             st.session_state.lista_posiciones = ["TODAS"]
-            st.session_state.last_uploaded = None
+            st.session_state.last_uploaded    = None
             st.rerun()
 
     LOG_COLORS = {
         "CONSEGUIDO": gr_hi, "ELIMINADO": r_hi, "SOBRE": cyan,
-        "GUARDADO": g_hi,    "SISTEMA":  t_mid,
+        "GUARDADO":   g_hi,  "SISTEMA":  t_mid,
     }
     with st.expander("📜 ACTIVITY LOG · LIVE", expanded=False):
         if st.session_state.logs:
@@ -504,6 +513,7 @@ with st.sidebar:
         else:
             st.caption("Sin actividad registrada.")
 
+# Botones filtro + sobre
 c1, c2, c3, _spacer, c_sobre = st.columns([1.2, 1.2, 1.2, 3.5, 2])
 
 CAT_ACTIVE = st.session_state.cat_filter
@@ -534,6 +544,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Panel sobre
 if st.session_state.show_sobre:
     st.markdown(
         f"<div class='sobre-panel'>"
@@ -550,9 +561,9 @@ if st.session_state.show_sobre:
     ]
 
     selected_ids = []
-    row1_cols = st.columns(4)
-    row2_cols = st.columns(4)
-    all_slots = row1_cols + row2_cols
+    row1_cols    = st.columns(4)
+    row2_cols    = st.columns(4)
+    all_slots    = row1_cols + row2_cols
 
     for i in range(7):
         with all_slots[i]:
@@ -593,12 +604,14 @@ if st.session_state.show_sobre:
         unsafe_allow_html=True,
     )
 
+# Tabla principal
 filtered_df = get_filtered_df()
 st.markdown(
     f"<p style='color:{t_dim};font-size:12px;margin-bottom:4px;'>"
     f"Mostrando <b style='color:{t_mid};'>{len(filtered_df)}</b> cromos</p>",
     unsafe_allow_html=True,
 )
+
 if filtered_df.empty:
     st.info("No hay cromos que coincidan con los filtros activos o el album esta vacio. Sube tu CSV en la barra lateral para empezar.")
 else:
@@ -616,3 +629,19 @@ else:
         if handle_click(filtered_df, edited):
             st.toast("⚡ Cambios aplicados. ¡Pulsa el boton dorado de la barra lateral para bajar tu CSV!", icon="ℹ️")
             st.rerun()
+
+# Footer
+st.markdown(
+    f"""
+    <div class="footer">
+        <span class="brand">FERNANDO ROMERO MORENO ®</span>
+        <span class="sep">|</span>
+        Panini 2026 · Album Digital
+        <span class="sep">|</span>
+        © {datetime.now().year} · Todos los derechos reservados
+        <span class="sep">|</span>
+        Herramienta de uso personal · Prohibida su distribución sin autorización
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
