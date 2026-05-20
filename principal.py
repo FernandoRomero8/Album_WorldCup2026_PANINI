@@ -640,7 +640,6 @@ st.markdown(
         <span class="sep">|</span>
         © {datetime.now().year} · Todos los derechos reservados
         <span class="sep">|</span>
-        Herramienta de uso personal · Prohibida su distribución sin autorización
     </div>
     """,
     unsafe_allow_html=True,
