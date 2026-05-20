@@ -4,7 +4,7 @@
 
 ## 🚀 CÓMO USAR LA APLICACIÓN
 
-* **🌐 Version Web (En vivo):** https://fernandoromero8-album-worldcup2026-panini.streamlit.app
+* **🌐 Version Web (En vivo):** https://albumworldcup2026panini-upbto86g4f3sgh6apawsre.streamlit.app/
 * **💻 Version de Escritorio (.exe):** Ve a la sección de **Releases** en el menú de la derecha para descargarte el ejecutable local con autoguardado en disco.
 
 ---
